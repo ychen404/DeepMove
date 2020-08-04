@@ -7,6 +7,7 @@ from torch.autograd import Variable
 
 import numpy as np
 import cPickle as pickle
+# import pickle as pickle
 from collections import deque, Counter
 
 
@@ -18,7 +19,10 @@ class RnnParameterData(object):
         self.data_path = data_path
         self.save_path = save_path
         self.data_name = data_name
+        print(data_name)
+
         data = pickle.load(open(self.data_path + self.data_name + '.pk', 'rb'))
+        # data = pickle.load(open(self.data_path + self.data_name + '.pkl', 'rb'))
         self.vid_list = data['vid_list']
         self.uid_list = data['uid_list']
         self.data_neural = data['data_neural']
@@ -288,15 +292,19 @@ def run_simple(data, run_idx, mode, lr, clip, model, optimizer, criterion, mode2
     run_queue = None
     if mode == 'train':
         model.train(True)
+        print("10")
         run_queue = generate_queue(run_idx, 'random', 'train')
     elif mode == 'test':
         model.train(False)
         run_queue = generate_queue(run_idx, 'normal', 'test')
     total_loss = []
     queue_len = len(run_queue)
-
+    print("queue_len: {}".format(queue_len))
     users_acc = {}
     for c in range(queue_len):
+        
+        if c % 100 == 0:
+            print("c = {}".format(c))
         optimizer.zero_grad()
         u, i = run_queue.popleft()
         if u not in users_acc:
@@ -305,7 +313,7 @@ def run_simple(data, run_idx, mode, lr, clip, model, optimizer, criterion, mode2
         tim = data[u][i]['tim'].cuda()
         target = data[u][i]['target'].cuda()
         uid = Variable(torch.LongTensor([u])).cuda()
-
+        
         if 'attn' in mode2:
             history_loc = data[u][i]['history_loc'].cuda()
             history_tim = data[u][i]['history_tim'].cuda()
@@ -315,6 +323,7 @@ def run_simple(data, run_idx, mode, lr, clip, model, optimizer, criterion, mode2
         elif mode2 == 'attn_avg_long_user':
             history_count = data[u][i]['history_count']
             target_len = target.data.size()[0]
+            
             scores = model(loc, tim, history_loc, history_tim, history_count, uid, target_len)
         elif mode2 == 'attn_local_long':
             target_len = target.data.size()[0]
@@ -339,7 +348,9 @@ def run_simple(data, run_idx, mode, lr, clip, model, optimizer, criterion, mode2
             users_acc[u][0] += len(target)
             acc = get_acc(target, scores)
             users_acc[u][1] += acc[2]
-        total_loss.append(loss.data.cpu().numpy()[0])
+        # print(loss.data.cpu().numpy().size())
+        # total_loss.append(loss.data.cpu().numpy()[0])
+        total_loss.append(loss.data.cpu().numpy())
 
     avg_loss = np.mean(total_loss, dtype=np.float64)
     if mode == 'train':

@@ -42,6 +42,7 @@ def run(args):
     if parameters.model_mode in ['simple', 'simple_long']:
         model = TrajPreSimple(parameters=parameters).cuda()
     elif parameters.model_mode == 'attn_avg_long_user':
+        print("long user\n")
         model = TrajPreAttnAvgLongUser(parameters=parameters).cuda()
     elif parameters.model_mode == 'attn_local_long':
         model = TrajPreLocalAttnLong(parameters=parameters).cuda()
@@ -56,18 +57,22 @@ def run(args):
         parameters.history_mode = 'whole'
 
     criterion = nn.NLLLoss().cuda()
+    print("1")
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=parameters.lr,
                            weight_decay=parameters.L2)
+    print("2")
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=parameters.lr_step,
                                                      factor=parameters.lr_decay, threshold=1e-3)
+    print("3")
 
     lr = parameters.lr
     metrics = {'train_loss': [], 'valid_loss': [], 'accuracy': [], 'valid_acc': {}}
-
+    print("4")
     candidate = parameters.data_neural.keys()
+    print("5")
     avg_acc_markov, users_acc_markov = markov(parameters, candidate)
     metrics['markov_acc'] = users_acc_markov
-
+    print("6")
     if 'long' in parameters.model_mode:
         long_history = True
     else:
@@ -79,6 +84,7 @@ def run(args):
         data_test, test_idx = generate_input_history(parameters.data_neural, 'test', mode2=parameters.history_mode,
                                                      candidate=candidate)
     elif long_history is True:
+        print("7")
         if parameters.model_mode == 'simple_long':
             data_train, train_idx = generate_input_long_history2(parameters.data_neural, 'train', candidate=candidate)
             data_test, test_idx = generate_input_long_history2(parameters.data_neural, 'test', candidate=candidate)
@@ -91,10 +97,15 @@ def run(args):
                                                        len([y for x in test_idx for y in test_idx[x]])))
     SAVE_PATH = args.save_path
     tmp_path = 'checkpoint/'
-    os.mkdir(SAVE_PATH + tmp_path)
+    
+    if not os.path.exists(SAVE_PATH + tmp_path):
+        os.mkdir(SAVE_PATH + tmp_path)
+    
     for epoch in range(parameters.epoch):
+        print("8")
         st = time.time()
         if args.pretrain == 0:
+            print("9")
             model, avg_loss = run_simple(data_train, train_idx, 'train', lr, parameters.clip, model, optimizer,
                                          criterion, parameters.model_mode)
             print('==>Train Epoch:{:0>2d} Loss:{:.4f} lr:{}'.format(epoch, avg_loss, lr))
@@ -207,6 +218,7 @@ if __name__ == '__main__':
                         choices=['simple', 'simple_long', 'attn_avg_long_user', 'attn_local_long'])
     parser.add_argument('--pretrain', type=int, default=1)
     args = parser.parse_args()
+    print(args)
     if args.pretrain == 1:
         args = load_pretrained_model(args)
 

@@ -26,7 +26,7 @@ class TrajPreSimple(nn.Module):
         self.emb_tim = nn.Embedding(self.tim_size, self.tim_emb_size)
 
         input_size = self.loc_emb_size + self.tim_emb_size
-
+            
         if self.rnn_type == 'GRU':
             self.rnn = nn.GRU(input_size, self.hidden_size, 1)
         elif self.rnn_type == 'LSTM':
