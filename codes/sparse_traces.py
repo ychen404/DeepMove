@@ -6,6 +6,7 @@ import argparse
 import numpy as np
 import cPickle as pickle
 from collections import Counter
+from time import strptime
 
 
 def entropy_spatial(sessions):
@@ -28,10 +29,17 @@ class DataFoursquare(object):
     def __init__(self, trace_min=10, global_visit=10, hour_gap=72, min_gap=10, session_min=2, session_max=10,
                  sessions_min=2, train_split=0.8, embedding_len=50):
         tmp_path = "../data/"
-        self.TWITTER_PATH = tmp_path + 'foursquare/tweets_clean.txt'
-        self.VENUES_PATH = tmp_path + 'foursquare/venues_all.txt'
+        
+        # self.TWITTER_PATH = tmp_path + 'foursquare/tweets_clean.txt'
+        self.TWITTER_PATH = tmp_path + 'tweets_clean_sample.txt'
+        # self.TWITTER_PATH = '/home/local/ASUAD/ychen404/Code/DeepMove_new/dataset_tsmc2014/dataset_TSMC2014_NYC_simple.txt'
+        self.VENUES_PATH = tmp_path + 'foursquare/venues_all.txt'       
         self.SAVE_PATH = tmp_path
-        self.save_name = 'foursquare'
+        # self.save_name = 'foursquare_sample'
+        self.save_name = 'foursquare_nyc'
+        self.DATASET_PATH='/home/local/ASUAD/ychen404/Code/DeepMove_new/dataset_tsmc2014/'
+        self.DATASET_NAME='dataset_TSMC2014_NYC.txt'
+
 
         self.trace_len_min = trace_min
         self.location_global_visit_min = global_visit
@@ -61,9 +69,18 @@ class DataFoursquare(object):
 
     # ############# 1. read trajectory data from twitters
     def load_trajectory_from_tweets(self):
-        with open(self.TWITTER_PATH) as fid:
+        with open(self.DATASET_PATH + self.DATASET_NAME) as fid:
+        # with open(self.TWITTER_PATH, 'r') as fid:
             for i, line in enumerate(fid):
-                _, uid, _, _, tim, _, _, tweet, pid = line.strip('\r\n').split('')
+                # _, uid, _, _, tim, _, _, tweet, pid = line.strip('\r\n').split('')
+                # print("pid:{}".format(pid))
+                
+                uid, pid, _, _, _, _, _, tim_orig = line.strip('\r\n').split('\t')
+                # print(tim)
+                day, mon, date, time, zero, year = tim_orig.strip('\r\n').split(' ')
+                mon_num = str(strptime(mon, '%b').tm_mon)
+                tim = (year + '-' + mon_num + '-' + date + ' ' + time)
+                # print(tim)
                 if uid not in self.data:
                     self.data[uid] = [[pid, tim]]
                 else:
@@ -72,15 +89,40 @@ class DataFoursquare(object):
                     self.venues[pid] = 1
                 else:
                     self.venues[pid] += 1
+        # print("1")
+        # print(self.data.keys())
+        # print(self.data['6277272'])
+        # print(self.data['17806443'])
+        # print(self.data['14911445'])
+        # print("self.data: {}".format(self.data))
+        # print("self.venues: {}".format(self.venues))
 
     # ########### 3.0 basically filter users based on visit length and other statistics
     def filter_users_by_length(self):
+        """
+        [ expression for item in list if conditional ]
+        """
+        
+        # for x in self.data:
+        #     print("X before: {}".format(x))
+        #     print("x len: {}".format(len(self.data[x])))
+        #     print(bool(len(self.data[x]) > self.trace_len_min))
+        #     print(x[1])
+        
         uid_3 = [x for x in self.data if len(self.data[x]) > self.trace_len_min]
+        # print("x: {}".format(x))
+        # print("self.data[x]: {}".format(self.data[x]))
+        # print("self.trace_len_min: {}".format(self.trace_len_min))
+        # print("uid_3: {}".format(uid_3))
         pick3 = sorted([(x, len(self.data[x])) for x in uid_3], key=lambda x: x[1], reverse=True)
+        # print("pick3: {}".format(pick3))
         pid_3 = [x for x in self.venues if self.venues[x] > self.location_global_visit_min]
         pid_pic3 = sorted([(x, self.venues[x]) for x in pid_3], key=lambda x: x[1], reverse=True)
         pid_3 = dict(pid_pic3)
+        # print("dddddd")
+        # print(pid_3.keys())
 
+        # print("ff")
         session_len_list = []
         for u in pick3:
             uid = u[0]
@@ -90,6 +132,8 @@ class DataFoursquare(object):
             sessions = {}
             for i, record in enumerate(info):
                 poi, tmd = record
+                # print("poi: {}".format(poi))
+                # print("tmd: {}".format(tmd))
                 try:
                     tid = int(time.mktime(time.strptime(tmd, "%Y-%m-%d %H:%M:%S")))
                 except Exception as e:
@@ -138,9 +182,11 @@ class DataFoursquare(object):
 
     # support for radius of gyration
     def load_venues(self):
-        with open(self.TWITTER_PATH, 'r') as fid:
+        # with open(self.TWITTER_PATH, 'r') as fid:
+        with open(self.DATASET_PATH + self.DATASET_NAME, 'r') as fid:
             for line in fid:
-                _, uid, lon, lat, tim, _, _, tweet, pid = line.strip('\r\n').split('')
+                # _, uid, lon, lat, tim, _, _, tweet, pid = line.strip('\r\n').split('')
+                uid, pid, _, _, lat, lon, _, tim = line.strip('\r\n').split('\t')
                 self.pid_loc_lat[pid] = [float(lon), float(lat)]
 
     def venues_lookup(self):
@@ -266,7 +312,8 @@ if __name__ == '__main__':
     parameters = data_generator.get_parameters()
     print('############PARAMETER SETTINGS:\n' + '\n'.join([p + ':' + str(parameters[p]) for p in parameters]))
     print('############START PROCESSING:')
-    print('load trajectory from {}'.format(data_generator.TWITTER_PATH))
+    # print('load trajectory from {}'.format(data_generator.TWITTER_PATH))
+    print('load trajectory from {}'.format(data_generator.DATASET_PATH + data_generator.DATASET_NAME))
     data_generator.load_trajectory_from_tweets()
     print('filter users')
     data_generator.filter_users_by_length()
