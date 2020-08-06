@@ -75,12 +75,14 @@ class DataFoursquare(object):
                 # _, uid, _, _, tim, _, _, tweet, pid = line.strip('\r\n').split('')
                 # print("pid:{}".format(pid))
                 
+                ########## Match the fields in Foursquare NYC dataset ##########
                 uid, pid, _, _, _, _, _, tim_orig = line.strip('\r\n').split('\t')
-                # print(tim)
+
+                ########## Convert character month to number to match with the clean_tweets_sample.txt ########## 
                 day, mon, date, time, zero, year = tim_orig.strip('\r\n').split(' ')
                 mon_num = str(strptime(mon, '%b').tm_mon)
                 tim = (year + '-' + mon_num + '-' + date + ' ' + time)
-                # print(tim)
+                
                 if uid not in self.data:
                     self.data[uid] = [[pid, tim]]
                 else:
@@ -186,7 +188,11 @@ class DataFoursquare(object):
         with open(self.DATASET_PATH + self.DATASET_NAME, 'r') as fid:
             for line in fid:
                 # _, uid, lon, lat, tim, _, _, tweet, pid = line.strip('\r\n').split('')
-                uid, pid, _, _, lat, lon, _, tim = line.strip('\r\n').split('\t')
+                uid, pid, _, _, lat, lon, _, tim_orig = line.strip('\r\n').split('\t')
+                
+                day, mon, date, time, zero, year = tim_orig.strip('\r\n').split(' ')
+                mon_num = str(strptime(mon, '%b').tm_mon)
+                tim = (year + '-' + mon_num + '-' + date + ' ' + time)
                 self.pid_loc_lat[pid] = [float(lon), float(lat)]
 
     def venues_lookup(self):
