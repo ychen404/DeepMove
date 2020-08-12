@@ -9,6 +9,7 @@ import numpy as np
 import cPickle as pickle
 # import pickle as pickle
 from collections import deque, Counter
+import pdb
 
 
 class RnnParameterData(object):
@@ -133,93 +134,6 @@ def generate_input_history(data_neural, mode, mode2=None, candidate=None):
     return data_train, train_idx
 
 
-def generate_input_long_history2(data_neural, mode, candidate=None):
-    data_train = {}
-    train_idx = {}
-    if candidate is None:
-        candidate = data_neural.keys()
-    for u in candidate:
-        sessions = data_neural[u]['sessions']
-        train_id = data_neural[u][mode]
-        data_train[u] = {}
-
-        trace = {}
-        session = []
-        for c, i in enumerate(train_id):
-            session.extend(sessions[i])
-        target = np.array([s[0] for s in session[1:]])
-
-        loc_tim = []
-        loc_tim.extend([(s[0], s[1]) for s in session[:-1]])
-        loc_np = np.reshape(np.array([s[0] for s in loc_tim]), (len(loc_tim), 1))
-        tim_np = np.reshape(np.array([s[1] for s in loc_tim]), (len(loc_tim), 1))
-        trace['loc'] = Variable(torch.LongTensor(loc_np))
-        trace['tim'] = Variable(torch.LongTensor(tim_np))
-        trace['target'] = Variable(torch.LongTensor(target))
-        data_train[u][i] = trace
-        # train_idx[u] = train_id
-        if mode == 'train':
-            train_idx[u] = [0, i]
-        else:
-            train_idx[u] = [i]
-    return data_train, train_idx
-
-
-def generate_input_long_history(data_neural, mode, candidate=None):
-    data_train = {}
-    train_idx = {}
-    if candidate is None:
-        candidate = data_neural.keys()
-    for u in candidate:
-        sessions = data_neural[u]['sessions']
-        train_id = data_neural[u][mode]
-        data_train[u] = {}
-        for c, i in enumerate(train_id):
-            trace = {}
-            if mode == 'train' and c == 0:
-                continue
-            session = sessions[i]
-            target = np.array([s[0] for s in session[1:]])
-
-            history = []
-            if mode == 'test':
-                test_id = data_neural[u]['train']
-                for tt in test_id:
-                    history.extend([(s[0], s[1]) for s in sessions[tt]])
-            for j in range(c):
-                history.extend([(s[0], s[1]) for s in sessions[train_id[j]]])
-
-            history_tim = [t[1] for t in history]
-            history_count = [1]
-            last_t = history_tim[0]
-            count = 1
-            for t in history_tim[1:]:
-                if t == last_t:
-                    count += 1
-                else:
-                    history_count[-1] = count
-                    history_count.append(1)
-                    last_t = t
-                    count = 1
-
-            history_loc = np.reshape(np.array([s[0] for s in history]), (len(history), 1))
-            history_tim = np.reshape(np.array([s[1] for s in history]), (len(history), 1))
-            trace['history_loc'] = Variable(torch.LongTensor(history_loc))
-            trace['history_tim'] = Variable(torch.LongTensor(history_tim))
-            trace['history_count'] = history_count
-
-            loc_tim = history
-            loc_tim.extend([(s[0], s[1]) for s in session[:-1]])
-            loc_np = np.reshape(np.array([s[0] for s in loc_tim]), (len(loc_tim), 1))
-            tim_np = np.reshape(np.array([s[1] for s in loc_tim]), (len(loc_tim), 1))
-            trace['loc'] = Variable(torch.LongTensor(loc_np))
-            trace['tim'] = Variable(torch.LongTensor(tim_np))
-            trace['target'] = Variable(torch.LongTensor(target))
-            data_train[u][i] = trace
-        train_idx[u] = train_id
-    return data_train, train_idx
-
-
 def generate_queue(train_idx, mode, mode2):
     """return a deque. You must use it by train_queue.popleft()"""
     user = train_idx.keys()
@@ -250,10 +164,20 @@ def generate_queue(train_idx, mode, mode2):
 def get_acc(target, scores):
     """target and scores are torch cuda Variable"""
     target = target.data.cpu().numpy()
+    
     val, idxx = scores.data.topk(10, 1)
     predx = idxx.cpu().numpy()
+    
+    # print("val={}".format(val))
+    # print(type(predx))
+    print("target={}".format(target))
+
+
+    for i, p in enumerate(predx):
+        print(p)
     acc = np.zeros((3, 1))
     for i, p in enumerate(predx):
+        # pdb.set_trace()
         t = target[i]
         if t in p[:10] and t > 0:
             acc[0] += 1
@@ -262,29 +186,6 @@ def get_acc(target, scores):
         if t == p[0] and t > 0:
             acc[2] += 1
     return acc
-
-
-def get_hint(target, scores, users_visited):
-    """target and scores are torch cuda Variable"""
-    target = target.data.cpu().numpy()
-    val, idxx = scores.data.topk(1, 1)
-    predx = idxx.cpu().numpy()
-    hint = np.zeros((3,))
-    count = np.zeros((3,))
-    count[0] = len(target)
-    for i, p in enumerate(predx):
-        t = target[i]
-        if t == p[0] and t > 0:
-            hint[0] += 1
-        if t in users_visited:
-            count[1] += 1
-            if t == p[0] and t > 0:
-                hint[1] += 1
-        else:
-            count[2] += 1
-            if t == p[0] and t > 0:
-                hint[2] += 1
-    return hint, count
 
 
 def run_simple(data, run_idx, mode, lr, clip, model, optimizer, criterion, mode2=None):
@@ -311,20 +212,10 @@ def run_simple(data, run_idx, mode, lr, clip, model, optimizer, criterion, mode2
         target = data[u][i]['target'].cuda()
         uid = Variable(torch.LongTensor([u])).cuda()
 
-        if 'attn' in mode2:
-            history_loc = data[u][i]['history_loc'].cuda()
-            history_tim = data[u][i]['history_tim'].cuda()
 
-        if mode2 in ['simple', 'simple_long']:
-            scores = model(loc, tim)
-        elif mode2 == 'attn_avg_long_user':
-            history_count = data[u][i]['history_count']
-            target_len = target.data.size()[0]
-            scores = model(loc, tim, history_loc, history_tim, history_count, uid, target_len)
-        elif mode2 == 'attn_local_long':
-            target_len = target.data.size()[0]
-            scores = model(loc, tim, target_len)
-
+        # if mode2 in ['simple', 'simple_long']:
+        scores = model(loc, tim)
+        
         if scores.data.size()[0] > target.data.size()[0]:
             scores = scores[-target.data.size()[0]:]
         loss = criterion(scores, target)
@@ -343,7 +234,9 @@ def run_simple(data, run_idx, mode, lr, clip, model, optimizer, criterion, mode2
         elif mode == 'test':
             users_acc[u][0] += len(target)
             acc = get_acc(target, scores)
-            users_acc[u][1] += acc[2]
+            users_acc[u][1] += acc[1]
+            # users_acc[u][1] += acc[2]
+
         # print(loss.data.cpu().numpy().size())
         # print(loss.item())
         # print(loss.data.cpu().numpy())
@@ -358,72 +251,10 @@ def run_simple(data, run_idx, mode, lr, clip, model, optimizer, criterion, mode2
         users_rnn_acc = {}
         for u in users_acc:
             tmp_acc = users_acc[u][1] / users_acc[u][0]
+            # print("users_acc: {}".format(users_acc))
+            # print("users_acc[u][1]: {}".format(users_acc[u][1]))
+            # print("users_acc[u][0]: {}".format(users_acc[u][0]))
             users_rnn_acc[u] = tmp_acc.tolist()[0]
+            # print("users_rnn_acc[u]: {}".format(users_rnn_acc[u]))
         avg_acc = np.mean([users_rnn_acc[x] for x in users_rnn_acc])
         return avg_loss, avg_acc, users_rnn_acc
-
-
-def markov(parameters, candidate):
-    validation = {}
-    for u in candidate:
-        traces = parameters.data_neural[u]['sessions']
-        train_id = parameters.data_neural[u]['train']
-        test_id = parameters.data_neural[u]['test']
-        trace_train = []
-        for tr in train_id:
-            trace_train.append([t[0] for t in traces[tr]])
-        locations_train = []
-        for t in trace_train:
-            locations_train.extend(t)
-        trace_test = []
-        for tr in test_id:
-            trace_test.append([t[0] for t in traces[tr]])
-        locations_test = []
-        for t in trace_test:
-            locations_test.extend(t)
-        validation[u] = [locations_train, locations_test]
-    acc = 0
-    count = 0
-    user_acc = {}
-    for u in validation.keys():
-        topk = list(set(validation[u][0]))
-        transfer = np.zeros((len(topk), len(topk)))
-
-        # train
-        sessions = parameters.data_neural[u]['sessions']
-        train_id = parameters.data_neural[u]['train']
-        for i in train_id:
-            for j, s in enumerate(sessions[i][:-1]):
-                loc = s[0]
-                target = sessions[i][j + 1][0]
-                if loc in topk and target in topk:
-                    r = topk.index(loc)
-                    c = topk.index(target)
-                    transfer[r, c] += 1
-        for i in range(len(topk)):
-            tmp_sum = np.sum(transfer[i, :])
-            if tmp_sum > 0:
-                transfer[i, :] = transfer[i, :] / tmp_sum
-
-        # validation
-        user_count = 0
-        user_acc[u] = 0
-        test_id = parameters.data_neural[u]['test']
-        for i in test_id:
-            for j, s in enumerate(sessions[i][:-1]):
-                loc = s[0]
-                target = sessions[i][j + 1][0]
-                count += 1
-                user_count += 1
-                if loc in topk:
-                    pred = np.argmax(transfer[topk.index(loc), :])
-                    if pred >= len(topk) - 1:
-                        pred = np.random.randint(len(topk))
-
-                    pred2 = topk[pred]
-                    if pred2 == target:
-                        acc += 1
-                        user_acc[u] += 1
-        user_acc[u] = user_acc[u] / user_count
-    avg_acc = np.mean([user_acc[u] for u in user_acc])
-    return avg_acc, user_acc

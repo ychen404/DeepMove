@@ -15,9 +15,8 @@ from json import encoder
 
 encoder.FLOAT_REPR = lambda o: format(o, '.3f')
 
-from train_simple import run_simple, RnnParameterData, generate_input_history, markov, \
-    generate_input_long_history, generate_input_long_history2
-from model import TrajPreSimple, TrajPreAttnAvgLongUser, TrajPreLocalAttnLong
+from train_simple import run_simple, RnnParameterData, generate_input_history
+from model_simple import TrajPreSimple
 
 
 def run(args):
@@ -44,13 +43,6 @@ def run(args):
     if args.pretrain == 1:
         model.load_state_dict(torch.load("../pretrain/" + args.model_mode + "/res.m"))
 
-    if 'max' in parameters.model_mode:
-        parameters.history_mode = 'max'
-    elif 'avg' in parameters.model_mode:
-        parameters.history_mode = 'avg'
-    else:
-        parameters.history_mode = 'whole'
-
     criterion = nn.NLLLoss().cuda()
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=parameters.lr,
                            weight_decay=parameters.L2)
@@ -62,33 +54,19 @@ def run(args):
     metrics = {'train_loss': [], 'valid_loss': [], 'accuracy': [], 'valid_acc': {}}
 
     candidate = parameters.data_neural.keys()
-    avg_acc_markov, users_acc_markov = markov(parameters, candidate)
-    metrics['markov_acc'] = users_acc_markov
-
-    if 'long' in parameters.model_mode:
-        long_history = True
-    else:
-        long_history = False
-
-    if long_history is False:
-        data_train, train_idx = generate_input_history(parameters.data_neural, 'train', mode2=parameters.history_mode,
+    print("candidate: {}".format(candidate))
+    
+    data_train, train_idx = generate_input_history(parameters.data_neural, 'train', mode2=parameters.history_mode,
                                                        candidate=candidate)
-        data_test, test_idx = generate_input_history(parameters.data_neural, 'test', mode2=parameters.history_mode,
+    data_test, test_idx = generate_input_history(parameters.data_neural, 'test', mode2=parameters.history_mode,
                                                      candidate=candidate)
-    elif long_history is True:
-        if parameters.model_mode == 'simple_long':
-            data_train, train_idx = generate_input_long_history2(parameters.data_neural, 'train', candidate=candidate)
-            data_test, test_idx = generate_input_long_history2(parameters.data_neural, 'test', candidate=candidate)
-        else:
-            data_train, train_idx = generate_input_long_history(parameters.data_neural, 'train', candidate=candidate)
-            data_test, test_idx = generate_input_long_history(parameters.data_neural, 'test', candidate=candidate)
-
-    print('users:{} markov:{} train:{} test:{}'.format(len(candidate), avg_acc_markov,
-                                                       len([y for x in train_idx for y in train_idx[x]]),
-                                                       len([y for x in test_idx for y in test_idx[x]])))
     SAVE_PATH = args.save_path
     tmp_path = 'checkpoint/'
-    os.mkdir(SAVE_PATH + tmp_path)
+
+    
+    if not os.path.exists(SAVE_PATH + tmp_path):
+        os.mkdir(SAVE_PATH + tmp_path)
+
     for epoch in range(parameters.epoch):
         st = time.time()
         if args.pretrain == 0:
@@ -122,8 +100,12 @@ def run(args):
             break
         if args.pretrain == 1:
             break
+    
 
     mid = np.argmax(metrics['accuracy'])
+    print(metrics['accuracy'])
+    print("mid: {}".format(mid))
+    
     avg_acc = metrics['accuracy'][mid]
     load_name_tmp = 'ep_' + str(mid) + '.m'
     model.load_state_dict(torch.load(SAVE_PATH + tmp_path + load_name_tmp))
