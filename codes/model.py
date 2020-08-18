@@ -75,6 +75,7 @@ class TrajPreSimple(nn.Module):
 
         y = self.fc(out)
         score = F.log_softmax(y)  # calculate loss by NLLoss
+        # print("The length of the score is {}".format(str(len(score))))
         return score
 
 

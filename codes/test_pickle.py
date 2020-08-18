@@ -46,7 +46,6 @@ tweets_path = '/home/local/ASUAD/ychen404/Code/DeepMove_new/data/tweets_clean_sa
 # tweets = pd.read_csv(tweets_path, sep=" ", header=None)
 # print(tweets.head())
 
-
 # Target time format
 # 2010-02-25 23:40:19
 

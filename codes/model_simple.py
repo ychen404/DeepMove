@@ -61,11 +61,11 @@ class TrajPreSimple(nn.Module):
             c1 = c1.cuda()
 
         loc_emb = self.emb_loc(loc)
-        print("loc_emb.shape={}".format(loc_emb.shape))
+        # print("loc_emb.shape={}".format(loc_emb.shape))
         tim_emb = self.emb_tim(tim)
-        print("tim_emb.shape={}".format(tim_emb.shape))
+        # print("tim_emb.shape={}".format(tim_emb.shape))
         x = torch.cat((loc_emb, tim_emb), 2)
-        print("x.shape={}".format(x.shape))
+        # print("x.shape={}".format(x.shape))
         x = self.dropout(x)
 
         if self.rnn_type == 'GRU' or self.rnn_type == 'RNN':

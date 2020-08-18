@@ -9,7 +9,7 @@ import numpy as np
 import cPickle as pickle
 # import pickle as pickle
 from collections import deque, Counter
-
+import pdb
 
 class RnnParameterData(object):
     def __init__(self, loc_emb_size=500, uid_emb_size=40, voc_emb_size=50, tim_emb_size=10, hidden_size=500,
@@ -248,8 +248,10 @@ def generate_queue(train_idx, mode, mode2):
 
 def get_acc(target, scores):
     """target and scores are torch cuda Variable"""
+    # pdb.set_trace()
     target = target.data.cpu().numpy()
     val, idxx = scores.data.topk(10, 1)
+
     predx = idxx.cpu().numpy()
     acc = np.zeros((3, 1))
     for i, p in enumerate(predx):
@@ -347,6 +349,7 @@ def run_simple(data, run_idx, mode, lr, clip, model, optimizer, criterion, mode2
         elif mode == 'test':
             users_acc[u][0] += len(target)
             acc = get_acc(target, scores)
+            # print(type(scores))
             users_acc[u][1] += acc[2]
         # print(loss.data.cpu().numpy().size())
         # total_loss.append(loss.data.cpu().numpy()[0])
@@ -356,10 +359,16 @@ def run_simple(data, run_idx, mode, lr, clip, model, optimizer, criterion, mode2
     if mode == 'train':
         return model, avg_loss
     elif mode == 'test':
+        
         users_rnn_acc = {}
         for u in users_acc:
+            # pdb.set_trace()
             tmp_acc = users_acc[u][1] / users_acc[u][0]
             users_rnn_acc[u] = tmp_acc.tolist()[0]
+        
+        # for x in users_rnn_acc:
+        #     print("users_rnn_acc {}".format(users_rnn_acc[x]))
+
         avg_acc = np.mean([users_rnn_acc[x] for x in users_rnn_acc])
         return avg_loss, avg_acc, users_rnn_acc
 

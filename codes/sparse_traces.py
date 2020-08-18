@@ -36,9 +36,9 @@ class DataFoursquare(object):
         self.VENUES_PATH = tmp_path + 'foursquare/venues_all.txt'       
         self.SAVE_PATH = tmp_path
         # self.save_name = 'foursquare_sample'
-        self.save_name = 'foursquare_nyc'
+        self.save_name = 'foursquare_nyc_20000'
         self.DATASET_PATH='/home/local/ASUAD/ychen404/Code/DeepMove_new/dataset_tsmc2014/'
-        self.DATASET_NAME='dataset_TSMC2014_NYC.txt'
+        self.DATASET_NAME='dataset_TSMC2014_NYC_20000.txt'
 
 
         self.trace_len_min = trace_min
@@ -111,37 +111,65 @@ class DataFoursquare(object):
         #     print(bool(len(self.data[x]) > self.trace_len_min))
         #     print(x[1])
         
+        # filter out the uids with a number of visits that is larger than trace_len_min 
         uid_3 = [x for x in self.data if len(self.data[x]) > self.trace_len_min]
+        # print((len(self.data['344'])))
+        # print("uid_3: {}".format(uid_3))
         # print("x: {}".format(x))
         # print("self.data[x]: {}".format(self.data[x]))
         # print("self.trace_len_min: {}".format(self.trace_len_min))
         # print("uid_3: {}".format(uid_3))
+        
+        # print(len(self.data['344']))
+        # print([(x, len(self.data[x])) for x in uid_3])
+        
+        # Pack the uid and the number of visits together and sorted by the number of visits
         pick3 = sorted([(x, len(self.data[x])) for x in uid_3], key=lambda x: x[1], reverse=True)
-        # print("pick3: {}".format(pick3))
         pid_3 = [x for x in self.venues if self.venues[x] > self.location_global_visit_min]
+        
+        # for x in self.venues:
+        #     if self.venues[x] > self.location_global_visit_min:
+        #         print(x)
+
+        # print(pid_3)
+        
+        # print("location_global_visit_min: {}".format(self.location_global_visit_min))
+        
         pid_pic3 = sorted([(x, self.venues[x]) for x in pid_3], key=lambda x: x[1], reverse=True)
+        
         pid_3 = dict(pid_pic3)
-        # print("dddddd")
+        # for k in pid_3:
+        #     print(k)
         # print(pid_3.keys())
 
         # print("ff")
         session_len_list = []
+        # for u in pick3:
+        #     print(u)
+
         for u in pick3:
             uid = u[0]
             info = self.data[uid]
+            # Report the frequency of each element in the dictionary
+            # topk contains all the places with number of visits
             topk = Counter([x[0] for x in info]).most_common()
+            # topk1 is the locations visited more than once
             topk1 = [x[0] for x in topk if x[1] > 1]
+            
             sessions = {}
             for i, record in enumerate(info):
                 poi, tmd = record
                 # print("poi: {}".format(poi))
                 # print("tmd: {}".format(tmd))
                 try:
+                    # mktime: convert time the seconds since epoch in local time
                     tid = int(time.mktime(time.strptime(tmd, "%Y-%m-%d %H:%M:%S")))
+                    # print("tid: {}".format(tid))
                 except Exception as e:
                     print('error:{}'.format(e))
                     continue
                 sid = len(sessions)
+                # print("sid: {}".format(sid))
                 if poi not in pid_3 and poi not in topk1:
                     # if poi not in topk1:
                     continue
@@ -230,7 +258,9 @@ class DataFoursquare(object):
             train_id = sessions_id[:split_id]
             test_id = sessions_id[split_id:]
             pred_len = sum([len(sessions_tran[i]) - 1 for i in train_id])
+            print("pred_len: {}".format(pred_len))
             valid_len = sum([len(sessions_tran[i]) - 1 for i in test_id])
+            print("valid_len: {}".format(valid_len))
             train_loc = {}
             for i in train_id:
                 for sess in sessions_tran[i]:

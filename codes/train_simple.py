@@ -16,7 +16,7 @@ class RnnParameterData(object):
     def __init__(self, loc_emb_size=500, uid_emb_size=40, voc_emb_size=50, tim_emb_size=10, hidden_size=500,
                  lr=1e-3, lr_step=3, lr_decay=0.1, dropout_p=0.5, L2=1e-5, clip=5.0, optim='Adam',
                  history_mode='avg', attn_type='dot', epoch_max=30, rnn_type='LSTM', model_mode="simple",
-                 data_path='../data/', save_path='../results/', data_name='foursquare'):
+                 data_path='../data/', save_path='../results/', data_name='foursquare', accuracy_mode='top1'):
         self.data_path = data_path
         self.save_path = save_path
         self.data_name = data_name
@@ -52,6 +52,7 @@ class RnnParameterData(object):
         self.rnn_type = rnn_type
         self.history_mode = history_mode
         self.model_mode = model_mode
+        self.accuracy_mode = accuracy_mode
 
 
 def generate_input_history(data_neural, mode, mode2=None, candidate=None):
@@ -170,11 +171,11 @@ def get_acc(target, scores):
     
     # print("val={}".format(val))
     # print(type(predx))
-    print("target={}".format(target))
+    # print("target={}".format(target))
 
 
-    for i, p in enumerate(predx):
-        print(p)
+    # for i, p in enumerate(predx):
+    #     print(p)
     acc = np.zeros((3, 1))
     for i, p in enumerate(predx):
         # pdb.set_trace()
@@ -188,7 +189,7 @@ def get_acc(target, scores):
     return acc
 
 
-def run_simple(data, run_idx, mode, lr, clip, model, optimizer, criterion, mode2=None):
+def run_simple(data, run_idx, mode, accuracy_mode, lr, clip, model, optimizer, criterion, mode2=None):
     """mode=train: return model, avg_loss
        mode=test: return avg_loss,avg_acc,users_rnn_acc"""
     run_queue = None
@@ -234,8 +235,12 @@ def run_simple(data, run_idx, mode, lr, clip, model, optimizer, criterion, mode2
         elif mode == 'test':
             users_acc[u][0] += len(target)
             acc = get_acc(target, scores)
-            users_acc[u][1] += acc[1]
-            # users_acc[u][1] += acc[2]
+            if accuracy_mode == 'top1':
+                users_acc[u][1] += acc[2]
+            elif accuracy_mode == 'top5':
+                users_acc[u][1] += acc[1]
+            elif accuracy_mode == 'top10':
+                users_acc[u][1] += acc[0]
 
         # print(loss.data.cpu().numpy().size())
         # print(loss.item())

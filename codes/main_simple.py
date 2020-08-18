@@ -27,55 +27,51 @@ def run(args):
                                   lr_step=args.lr_step, lr_decay=args.lr_decay, L2=args.L2, rnn_type=args.rnn_type,
                                   optim=args.optim, attn_type=args.attn_type,
                                   clip=args.clip, epoch_max=args.epoch_max, history_mode=args.history_mode,
-                                  model_mode=args.model_mode, data_path=args.data_path, save_path=args.save_path)
+                                  model_mode=args.model_mode, data_path=args.data_path, save_path=args.save_path, accuracy_mode=args.accuracy_mode)
     argv = {'loc_emb_size': args.loc_emb_size, 'uid_emb_size': args.uid_emb_size, 'voc_emb_size': args.voc_emb_size,
             'tim_emb_size': args.tim_emb_size, 'hidden_size': args.hidden_size,
             'dropout_p': args.dropout_p, 'data_name': args.data_name, 'learning_rate': args.learning_rate,
             'lr_step': args.lr_step, 'lr_decay': args.lr_decay, 'L2': args.L2, 'act_type': 'selu',
             'optim': args.optim, 'attn_type': args.attn_type, 'clip': args.clip, 'rnn_type': args.rnn_type,
-            'epoch_max': args.epoch_max, 'history_mode': args.history_mode, 'model_mode': args.model_mode}
+            'epoch_max': args.epoch_max, 'history_mode': args.history_mode, 'model_mode': args.model_mode, 'accuracy_mode':args.accuracy_mode}
     print('*' * 15 + 'start training' + '*' * 15)
     print('model_mode:{} history_mode:{} users:{}'.format(
         parameters.model_mode, parameters.history_mode, parameters.uid_size))
 
     model = TrajPreSimple(parameters=parameters).cuda()
-
     if args.pretrain == 1:
         model.load_state_dict(torch.load("../pretrain/" + args.model_mode + "/res.m"))
+
+    lr = parameters.lr
+    metrics = {'train_loss': [], 'valid_loss': [], 'accuracy': [], 'valid_acc': {}}
+
+    candidate = parameters.data_neural.keys()
+    
+    data_train, train_idx = generate_input_history(parameters.data_neural, 'train', mode2=parameters.history_mode,                                                       candidate=candidate)
+    data_test, test_idx = generate_input_history(parameters.data_neural, 'test', mode2=parameters.history_mode,
+                                                     candidate=candidate)
+    SAVE_PATH = args.save_path
+    tmp_path = 'checkpoint/'
+
+    if not os.path.exists(SAVE_PATH + tmp_path):
+        os.mkdir(SAVE_PATH + tmp_path)
+
 
     criterion = nn.NLLLoss().cuda()
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=parameters.lr,
                            weight_decay=parameters.L2)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=parameters.lr_step,
                                                      factor=parameters.lr_decay, threshold=1e-3)
-
-    # print(filter(lambda p: p.requires_grad, model.parameters()))
-    lr = parameters.lr
-    metrics = {'train_loss': [], 'valid_loss': [], 'accuracy': [], 'valid_acc': {}}
-
-    candidate = parameters.data_neural.keys()
-    print("candidate: {}".format(candidate))
     
-    data_train, train_idx = generate_input_history(parameters.data_neural, 'train', mode2=parameters.history_mode,
-                                                       candidate=candidate)
-    data_test, test_idx = generate_input_history(parameters.data_neural, 'test', mode2=parameters.history_mode,
-                                                     candidate=candidate)
-    SAVE_PATH = args.save_path
-    tmp_path = 'checkpoint/'
-
-    
-    if not os.path.exists(SAVE_PATH + tmp_path):
-        os.mkdir(SAVE_PATH + tmp_path)
-
     for epoch in range(parameters.epoch):
         st = time.time()
         if args.pretrain == 0:
-            model, avg_loss = run_simple(data_train, train_idx, 'train', lr, parameters.clip, model, optimizer,
+            model, avg_loss = run_simple(data_train, train_idx, 'train', parameters.accuracy_mode, lr, parameters.clip, model, optimizer,
                                          criterion, parameters.model_mode)
             print('==>Train Epoch:{:0>2d} Loss:{:.4f} lr:{}'.format(epoch, avg_loss, lr))
             metrics['train_loss'].append(avg_loss)
 
-        avg_loss, avg_acc, users_acc = run_simple(data_test, test_idx, 'test', lr, parameters.clip, model,
+        avg_loss, avg_acc, users_acc = run_simple(data_test, test_idx, 'test', parameters.accuracy_mode, lr, parameters.clip, model,
                                                   optimizer, criterion, parameters.model_mode)
         print('==>Test Acc:{:.4f} Loss:{:.4f}'.format(avg_acc, avg_loss))
 
@@ -184,6 +180,8 @@ if __name__ == '__main__':
     parser.add_argument('--save_path', type=str, default='../results/')
     parser.add_argument('--model_mode', type=str, default='simple_long',
                         choices=['simple', 'simple_long', 'attn_avg_long_user', 'attn_local_long'])
+    parser.add_argument('--accuracy_mode', type=str, default='top1',
+                        choices=['top1', 'top5', 'top10'])
     parser.add_argument('--pretrain', type=int, default=1)
     args = parser.parse_args()
     print(args)
