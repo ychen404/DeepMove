@@ -12,11 +12,13 @@ import time
 import argparse
 import numpy as np
 from json import encoder
+import pdb
 
 encoder.FLOAT_REPR = lambda o: format(o, '.3f')
 
-from train_simple import run_simple, RnnParameterData, generate_input_history
-from model_simple import TrajPreSimple
+from train import run_simple, RnnParameterData, generate_input_history, markov, \
+    generate_input_long_history, generate_input_long_history2
+from model import TrajPreSimple, TrajPreAttnAvgLongUser, TrajPreLocalAttnLong
 
 
 def run(args):
@@ -27,62 +29,102 @@ def run(args):
                                   lr_step=args.lr_step, lr_decay=args.lr_decay, L2=args.L2, rnn_type=args.rnn_type,
                                   optim=args.optim, attn_type=args.attn_type,
                                   clip=args.clip, epoch_max=args.epoch_max, history_mode=args.history_mode,
-                                  model_mode=args.model_mode, data_path=args.data_path, save_path=args.save_path, accuracy_mode=args.accuracy_mode)
+                                  model_mode=args.model_mode, data_path=args.data_path, save_path=args.save_path)
     argv = {'loc_emb_size': args.loc_emb_size, 'uid_emb_size': args.uid_emb_size, 'voc_emb_size': args.voc_emb_size,
             'tim_emb_size': args.tim_emb_size, 'hidden_size': args.hidden_size,
             'dropout_p': args.dropout_p, 'data_name': args.data_name, 'learning_rate': args.learning_rate,
             'lr_step': args.lr_step, 'lr_decay': args.lr_decay, 'L2': args.L2, 'act_type': 'selu',
             'optim': args.optim, 'attn_type': args.attn_type, 'clip': args.clip, 'rnn_type': args.rnn_type,
-            'epoch_max': args.epoch_max, 'history_mode': args.history_mode, 'model_mode': args.model_mode, 'accuracy_mode':args.accuracy_mode}
+            'epoch_max': args.epoch_max, 'history_mode': args.history_mode, 'model_mode': args.model_mode}
     print('*' * 15 + 'start training' + '*' * 15)
     print('model_mode:{} history_mode:{} users:{}'.format(
         parameters.model_mode, parameters.history_mode, parameters.uid_size))
 
-    model = TrajPreSimple(parameters=parameters).cuda()
+    if parameters.model_mode in ['simple', 'simple_long']:
+        model = TrajPreSimple(parameters=parameters).cuda()
+    elif parameters.model_mode == 'attn_avg_long_user':
+        print("long user\n")
+        model = TrajPreAttnAvgLongUser(parameters=parameters).cuda()
+    elif parameters.model_mode == 'attn_local_long':
+        model = TrajPreLocalAttnLong(parameters=parameters).cuda()
     if args.pretrain == 1:
         model.load_state_dict(torch.load("../pretrain/" + args.model_mode + "/res.m"))
 
-    lr = parameters.lr
-    metrics = {'train_loss': [], 'valid_loss': [], 'accuracy': [], 'valid_acc': {}}
-
-    candidate = parameters.data_neural.keys()
-    
-    data_train, train_idx = generate_input_history(parameters.data_neural, 'train', mode2=parameters.history_mode,                                                       candidate=candidate)
-    data_test, test_idx = generate_input_history(parameters.data_neural, 'test', mode2=parameters.history_mode,
-                                                     candidate=candidate)
-    SAVE_PATH = args.save_path
-    tmp_path = 'checkpoint/'
-
-    if not os.path.exists(SAVE_PATH + tmp_path):
-        os.mkdir(SAVE_PATH + tmp_path)
-
+    if 'max' in parameters.model_mode:
+        parameters.history_mode = 'max'
+    elif 'avg' in parameters.model_mode:
+        parameters.history_mode = 'avg'
+    else:
+        parameters.history_mode = 'whole'
 
     criterion = nn.NLLLoss().cuda()
+    print("1")
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=parameters.lr,
                            weight_decay=parameters.L2)
+    print("2")
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=parameters.lr_step,
                                                      factor=parameters.lr_decay, threshold=1e-3)
-    print("1")
+    print("3")
+
+    lr = parameters.lr
+    metrics = {'train_loss': [], 'valid_loss': [], 'accuracy': [], 'valid_acc': {}}
+    print("4")
+    candidate = parameters.data_neural.keys()
+    print("5")
+    # pdb.set_trace()
+
+    avg_acc_markov, users_acc_markov = markov(parameters, candidate)
+    metrics['markov_acc'] = users_acc_markov
+    
+    
+    print("6")
+    if 'long' in parameters.model_mode:
+        long_history = True
+    else:
+        long_history = False
+
+    if long_history is False:
+        data_train, train_idx = generate_input_history(parameters.data_neural, 'train', mode2=parameters.history_mode,
+                                                       candidate=candidate)
+        data_test, test_idx = generate_input_history(parameters.data_neural, 'test', mode2=parameters.history_mode,
+                                                     candidate=candidate)
+    elif long_history is True:
+        print("7")
+        if parameters.model_mode == 'simple_long':
+            data_train, train_idx = generate_input_long_history2(parameters.data_neural, 'train', candidate=candidate)
+            data_test, test_idx = generate_input_long_history2(parameters.data_neural, 'test', candidate=candidate)
+        else:
+            data_train, train_idx = generate_input_long_history(parameters.data_neural, 'train', candidate=candidate)
+            data_test, test_idx = generate_input_long_history(parameters.data_neural, 'test', candidate=candidate)
+
+    print('users:{} markov:{} train:{} test:{}'.format(len(candidate), avg_acc_markov,
+                                                       len([y for x in train_idx for y in train_idx[x]]),
+                                                       len([y for x in test_idx for y in test_idx[x]])))
+    SAVE_PATH = args.save_path
+    tmp_path = 'checkpoint/'
+    
+    if not os.path.exists(SAVE_PATH + tmp_path):
+        os.mkdir(SAVE_PATH + tmp_path)
+    
     for epoch in range(parameters.epoch):
+        print("8")
         st = time.time()
-        print("2")
         if args.pretrain == 0:
-            model, avg_loss = run_simple(data_train, train_idx, 'train', parameters.accuracy_mode, lr, parameters.clip, model, optimizer,
+            print("9")
+            model, avg_loss = run_simple(data_train, train_idx, 'train', lr, parameters.clip, model, optimizer,
                                          criterion, parameters.model_mode)
             print('==>Train Epoch:{:0>2d} Loss:{:.4f} lr:{}'.format(epoch, avg_loss, lr))
             metrics['train_loss'].append(avg_loss)
-            
-        avg_loss, avg_acc, users_acc = run_simple(data_test, test_idx, 'test', parameters.accuracy_mode, lr, parameters.clip, model,
-                                        optimizer, criterion, parameters.model_mode)
-        print("3")
+
+        avg_loss, avg_acc, users_acc = run_simple(data_test, test_idx, 'test', lr, parameters.clip, model,
+                                                  optimizer, criterion, parameters.model_mode)
         print('==>Test Acc:{:.4f} Loss:{:.4f}'.format(avg_acc, avg_loss))
 
         metrics['valid_loss'].append(avg_loss)
         metrics['accuracy'].append(avg_acc)
         metrics['valid_acc'][epoch] = users_acc
 
-        # save_name_tmp = 'ep_' + str(epoch) + '.m'
-        save_name_tmp = 'ep_' + str(epoch) + '.pt'
+        save_name_tmp = 'ep_' + str(epoch) + '.m'
         torch.save(model.state_dict(), SAVE_PATH + tmp_path + save_name_tmp)
 
         scheduler.step(avg_acc)
@@ -90,7 +132,7 @@ def run(args):
         lr = optimizer.param_groups[0]['lr']
         if lr_last > lr:
             load_epoch = np.argmax(metrics['accuracy'])
-            load_name_tmp = 'ep_' + str(load_epoch) + '.pt'
+            load_name_tmp = 'ep_' + str(load_epoch) + '.m'
             model.load_state_dict(torch.load(SAVE_PATH + tmp_path + load_name_tmp))
             print('load epoch={} model state'.format(load_epoch))
         if epoch == 0:
@@ -99,14 +141,10 @@ def run(args):
             break
         if args.pretrain == 1:
             break
-    
 
     mid = np.argmax(metrics['accuracy'])
-    print(metrics['accuracy'])
-    print("mid: {}".format(mid))
-    
     avg_acc = metrics['accuracy'][mid]
-    load_name_tmp = 'ep_' + str(mid) + '.pt'
+    load_name_tmp = 'ep_' + str(mid) + '.m'
     model.load_state_dict(torch.load(SAVE_PATH + tmp_path + load_name_tmp))
     save_name = 'res'
     json.dump({'args': argv, 'metrics': metrics}, fp=open(SAVE_PATH + save_name + '.rs', 'w'), indent=4)
@@ -114,7 +152,7 @@ def run(args):
     for key in metrics_view:
         metrics_view[key] = metrics[key]
     json.dump({'args': argv, 'metrics': metrics_view}, fp=open(SAVE_PATH + save_name + '.txt', 'w'), indent=4)
-    torch.save(model.state_dict(), SAVE_PATH + save_name + '.pt')
+    torch.save(model.state_dict(), SAVE_PATH + save_name + '.m')
 
     for rt, dirs, files in os.walk(SAVE_PATH + tmp_path):
         for name in files:
@@ -179,12 +217,10 @@ if __name__ == '__main__':
     parser.add_argument('--history_mode', type=str, default='avg', choices=['max', 'avg', 'whole'])
     parser.add_argument('--rnn_type', type=str, default='LSTM', choices=['LSTM', 'GRU', 'RNN'])
     parser.add_argument('--attn_type', type=str, default='dot', choices=['general', 'concat', 'dot'])
-    parser.add_argument('--data_path', type=str, default='../data/')
-    parser.add_argument('--save_path', type=str, default='../results/')
+    parser.add_argument('--data_path', type=str, default='../../data/')
+    parser.add_argument('--save_path', type=str, default='../../results/')
     parser.add_argument('--model_mode', type=str, default='simple_long',
                         choices=['simple', 'simple_long', 'attn_avg_long_user', 'attn_local_long'])
-    parser.add_argument('--accuracy_mode', type=str, default='top1',
-                        choices=['top1', 'top5', 'top10'])
     parser.add_argument('--pretrain', type=int, default=1)
     args = parser.parse_args()
     print(args)

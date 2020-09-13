@@ -23,7 +23,9 @@ class TrajPreSimple(nn.Module):
         self.rnn_type = parameters.rnn_type
 
         self.emb_loc = nn.Embedding(self.loc_size, self.loc_emb_size)
+        print("emb_loc={}, loc_size={}, loc_emb_size={}".format(self.emb_loc, self.loc_size, self.loc_emb_size))
         self.emb_tim = nn.Embedding(self.tim_size, self.tim_emb_size)
+
 
         input_size = self.loc_emb_size + self.tim_emb_size
             
@@ -36,7 +38,10 @@ class TrajPreSimple(nn.Module):
         self.init_weights()
 
         self.fc = nn.Linear(self.hidden_size, self.loc_size)
+        print("Shape of fc={}".format(self.fc))
+
         self.dropout = nn.Dropout(p=parameters.dropout_p)
+
 
     def init_weights(self):
         """

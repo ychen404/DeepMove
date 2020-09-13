@@ -8,6 +8,28 @@ import cPickle as pickle
 from collections import Counter
 from time import strptime
 
+import argparse
+import random
+
+# FILE = '../dataset_tsmc2014/dataset_TSMC2014_NYC_20000_user_1.txt'
+# OUTPUT = '../dataset_tsmc2014/dataset_TSMC2014_NYC_20000_user_1_top100.txt'
+
+FILE = '../dataset_tsmc2014/dataset_TSMC2014_NYC_20000.txt'
+OUTPUT = '../dataset_tsmc2014/dataset_TSMC2014_NYC_20000_top100.txt'
+# FILE = '../dataset_tsmc2014/dataset_TSMC2014_NYC_20000.txt'
+
+
+NUM_WORKERS = 2
+random.seed(10)
+worker_bin = [[] for i in range(NUM_WORKERS)]
+
+# Use the first 100 users as public 
+public_uid = []
+private_uid = []
+
+
+
+OUTPUT = '../dataset_tsmc2014/foursquare_nyc_20000_filtered.txt'
 
 def entropy_spatial(sessions):
     locations = {}
@@ -27,18 +49,23 @@ def entropy_spatial(sessions):
 
 class DataFoursquare(object):
     def __init__(self, trace_min=10, global_visit=10, hour_gap=72, min_gap=10, session_min=2, session_max=10,
-                 sessions_min=2, train_split=0.8, embedding_len=50):
+                 sessions_min=2, train_split=0.8, embedding_len=50, save_name='foursquare_nyc_public'):
         tmp_path = "../data/"
         
         # self.TWITTER_PATH = tmp_path + 'foursquare/tweets_clean.txt'
-        self.TWITTER_PATH = tmp_path + 'tweets_clean_sample.txt'
+        # self.TWITTER_PATH = tmp_path + 'tweets_clean_sample.txt'
         # self.TWITTER_PATH = '/home/local/ASUAD/ychen404/Code/DeepMove_new/dataset_tsmc2014/dataset_TSMC2014_NYC_simple.txt'
-        self.VENUES_PATH = tmp_path + 'foursquare/venues_all.txt'       
+        # self.VENUES_PATH = tmp_path + 'foursquare/venues_all.txt'       
         self.SAVE_PATH = tmp_path
         # self.save_name = 'foursquare_sample'
-        self.save_name = 'foursquare_nyc_20000'
+        # self.save_name = 'foursquare_nyc_20000_user_1'
+        self.save_name = save_name
         self.DATASET_PATH='/home/local/ASUAD/ychen404/Code/DeepMove_new/dataset_tsmc2014/'
-        self.DATASET_NAME='dataset_TSMC2014_NYC_20000.txt'
+        # self.DATASET_NAME='dataset_TSMC2014_NYC_20000.txt'
+        # self.DATASET_NAME='dataset_TSMC2014_NYC_20000_user_1.txt'
+        self.DATASET_NAME='dataset_TSMC2014_NYC_private.txt'
+
+        # self.DATASET_NAME='dataset_TSMC2014_NYC_20000_top100.txt'
 
 
         self.trace_len_min = trace_min
@@ -76,6 +103,10 @@ class DataFoursquare(object):
                 # print("pid:{}".format(pid))
                 
                 ########## Match the fields in Foursquare NYC dataset ##########
+                # print(i)
+                # if i % 1000 == 0:
+                #     print(i, line)
+
                 uid, pid, _, _, _, _, _, tim_orig = line.strip('\r\n').split('\t')
 
                 ########## Convert character month to number to match with the clean_tweets_sample.txt ########## 
@@ -91,13 +122,6 @@ class DataFoursquare(object):
                     self.venues[pid] = 1
                 else:
                     self.venues[pid] += 1
-        # print("1")
-        # print(self.data.keys())
-        # print(self.data['6277272'])
-        # print(self.data['17806443'])
-        # print(self.data['14911445'])
-        # print("self.data: {}".format(self.data))
-        # print("self.venues: {}".format(self.venues))
 
     # ########### 3.0 basically filter users based on visit length and other statistics
     def filter_users_by_length(self):
@@ -194,6 +218,8 @@ class DataFoursquare(object):
 
         self.user_filter3 = [x for x in self.data_filter if
                              self.data_filter[x]['sessions_count'] >= self.sessions_count_min]
+        filtered_user_id = self.user_filter3
+        return filtered_user_id
 
     # ########### 4. build dictionary for users and location
     def build_users_locations_dict(self):
@@ -258,9 +284,9 @@ class DataFoursquare(object):
             train_id = sessions_id[:split_id]
             test_id = sessions_id[split_id:]
             pred_len = sum([len(sessions_tran[i]) - 1 for i in train_id])
-            print("pred_len: {}".format(pred_len))
+            # print("pred_len: {}".format(pred_len))
             valid_len = sum([len(sessions_tran[i]) - 1 for i in test_id])
-            print("valid_len: {}".format(valid_len))
+            # print("valid_len: {}".format(valid_len))
             train_loc = {}
             for i in train_id:
                 for sess in sessions_tran[i]:
@@ -305,7 +331,7 @@ class DataFoursquare(object):
     # ############# 6. save variables
     def get_parameters(self):
         parameters = {}
-        parameters['TWITTER_PATH'] = self.TWITTER_PATH
+        # parameters['TWITTER_PATH'] = self.TWITTER_PATH
         parameters['SAVE_PATH'] = self.SAVE_PATH
 
         parameters['trace_len_min'] = self.trace_len_min
@@ -336,6 +362,8 @@ def parse_args():
     parser.add_argument('--session_min', type=int, default=5, help="control the length of session not too short")
     parser.add_argument('--sessions_min', type=int, default=5, help="the minimum amount of the good user's sessions")
     parser.add_argument('--train_split', type=float, default=0.8, help="train/test ratio")
+    parser.add_argument('--save_name', type=str, default='foursquare_nyc_20000_user_1', help="the file name for the pk")
+
     return parser.parse_args()
 
 
@@ -344,7 +372,7 @@ if __name__ == '__main__':
     data_generator = DataFoursquare(trace_min=args.trace_min, global_visit=args.global_visit,
                                     hour_gap=args.hour_gap, min_gap=args.min_gap,
                                     session_min=args.session_min, session_max=args.session_max,
-                                    sessions_min=args.sessions_min, train_split=args.train_split)
+                                    sessions_min=args.sessions_min, train_split=args.train_split, save_name=args.save_name)
     parameters = data_generator.get_parameters()
     print('############PARAMETER SETTINGS:\n' + '\n'.join([p + ':' + str(parameters[p]) for p in parameters]))
     print('############START PROCESSING:')

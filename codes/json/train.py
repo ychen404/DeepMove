@@ -10,13 +10,12 @@ import numpy as np
 import pickle as pickle
 from collections import deque, Counter
 import pdb
-# import ujson
 
 class RnnParameterData(object):
     def __init__(self, loc_emb_size=500, uid_emb_size=40, voc_emb_size=50, tim_emb_size=10, hidden_size=500,
                  lr=1e-3, lr_step=3, lr_decay=0.1, dropout_p=0.5, L2=1e-5, clip=5.0, optim='Adam',
                  history_mode='avg', attn_type='dot', epoch_max=30, rnn_type='LSTM', model_mode="simple",
-                 data_path='../data/', save_path='../results/', data_name='foursquare'):
+                 data_path='../../data/', save_path='../../results/', data_name='foursquare'):
         self.data_path = data_path
         self.save_path = save_path
         self.data_name = data_name
@@ -24,7 +23,7 @@ class RnnParameterData(object):
 
         data = pickle.load(open(self.data_path + self.data_name + '.pk', 'rb'))
         
-        # data = ujson.load(open(self.data_path + self.data_name + '.json', 'rb'))
+        # data = ujson.loads(open(self.data_path + self.data_name + '.json', 'rb'))
         # data = ujson.dumps(json_data)
         # print(data)
         # pdb.set_trace()
@@ -70,7 +69,7 @@ def generate_input_history(data_neural, mode, mode2=None, candidate=None):
         for c, i in enumerate(train_id):
             if mode == 'train' and c == 0:
                 continue
-            pdb.set_trace()
+            # pdb.set_trace()
             session = sessions[i]
             trace = {}
             loc_np = np.reshape(np.array([s[0] for s in session[:-1]]), (len(session[:-1]), 1))
@@ -229,10 +228,7 @@ def generate_input_long_history(data_neural, mode, candidate=None):
 
 def generate_queue(train_idx, mode, mode2):
     """return a deque. You must use it by train_queue.popleft()"""
-    # pdb.set_trace()
-    # user = train_idx.keys()
-    # Need to convert dict_keys to list in Python3
-    user = list(train_idx.keys())
+    user = train_idx.keys()
     train_queue = deque()
     if mode == 'random':
         initial_queue = {}
@@ -393,9 +389,12 @@ def markov(parameters, candidate):
     validation = {}
     for u in candidate:
         traces = parameters.data_neural[u]['sessions']
+        pdb.set_trace()
+        # print(traces)
         train_id = parameters.data_neural[u]['train']
         test_id = parameters.data_neural[u]['test']
         trace_train = []
+        # pdb.set_trace()
         for tr in train_id:
             trace_train.append([t[0] for t in traces[tr]])
         locations_train = []

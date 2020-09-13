@@ -1,25 +1,41 @@
-import argparse
-import random
-from time import strptime
-from collections import Counter
-import cPickle as pickle
+from __future__ import print_function
+from __future__ import division
+
 import time
+import argparse
+import numpy as np
+import cPickle as pickle
+from collections import Counter
+from time import strptime
+import pdb
+
+def entropy_spatial(sessions):
+    locations = {}
+    days = sorted(sessions.keys())
+    for d in days:
+        session = sessions[d]
+        for s in session:
+            if s[0] not in locations:
+                locations[s[0]] = 1
+            else:
+                locations[s[0]] += 1
+    frequency = np.array([locations[loc] for loc in locations])
+    frequency = frequency / np.sum(frequency)
+    entropy = - np.sum(frequency * np.log(frequency))
+    return entropy
 
 class DataFoursquare(object):
     def __init__(self, trace_min=10, global_visit=10, hour_gap=72, min_gap=10, session_min=2, session_max=10,
-                 sessions_min=2, train_split=0.8, embedding_len=50, save_name='foursquare_nyc_private', 
-                 dataset_name='dataset_TSMC2014_NYC_private'):
+                 sessions_min=2, train_split=0.8, embedding_len=50):
         tmp_path = "../data/"
         
-        self.SAVE_PATH = tmp_path
-        self.save_name = save_name
-        self.DATASET_PATH='/home/local/ASUAD/ychen404/Code/DeepMove_new/dataset_tsmc2014/'
+        # self.save_name = 'foursquare_nyc_20000'
+        # self.DATASET_PATH='/home/local/ASUAD/ychen404/Code/DeepMove_new/dataset_tsmc2014/'
         # self.DATASET_NAME='dataset_TSMC2014_NYC_20000.txt'
-        # self.DATASET_NAME='dataset_TSMC2014_NYC_20000_user_1.txt'
-        # self.DATASET_NAME='dataset_TSMC2014_NYC_private.txt'
-        self.DATASET_NAME = dataset_name
-        # self.DATASET_NAME='dataset_TSMC2014_NYC_20000_top100.txt'
 
+        self.save_name = 'tweets-cikm_20000'
+        self.DATASET_PATH='/home/local/ASUAD/ychen404/Code/DeepMove_new/serm-data/'
+        self.DATASET_NAME='tweets-cikm_20000.txt'
 
         self.trace_len_min = trace_min
         self.location_global_visit_min = global_visit
@@ -49,23 +65,19 @@ class DataFoursquare(object):
 
     # ############# 1. read trajectory data from twitters
     def load_trajectory_from_tweets(self):
-        with open(self.DATASET_PATH + self.DATASET_NAME + '.txt') as fid:
+        with open(self.DATASET_PATH + self.DATASET_NAME) as fid:
         # with open(self.TWITTER_PATH, 'r') as fid:
             for i, line in enumerate(fid):
-                # _, uid, _, _, tim, _, _, tweet, pid = line.strip('\r\n').split('')
+                _, uid, _, _, tim, _, _, tweet, pid = line.strip('\r\n').split('')
                 # print("pid:{}".format(pid))
                 
                 ########## Match the fields in Foursquare NYC dataset ##########
-                # print(i)
-                # if i % 1000 == 0:
-                #     print(i, line)
-
-                uid, pid, _, _, _, _, _, tim_orig = line.strip('\r\n').split('\t')
+                # uid, pid, _, _, _, _, _, tim_orig = line.strip('\r\n').split('\t')
 
                 ########## Convert character month to number to match with the clean_tweets_sample.txt ########## 
-                day, mon, date, time, zero, year = tim_orig.strip('\r\n').split(' ')
-                mon_num = str(strptime(mon, '%b').tm_mon)
-                tim = (year + '-' + mon_num + '-' + date + ' ' + time)
+                # day, mon, date, time, zero, year = tim_orig.strip('\r\n').split(' ')
+                # mon_num = str(strptime(mon, '%b').tm_mon)
+                # tim = (year + '-' + mon_num + '-' + date + ' ' + time)
                 
                 if uid not in self.data:
                     self.data[uid] = [[pid, tim]]
@@ -75,64 +87,88 @@ class DataFoursquare(object):
                     self.venues[pid] = 1
                 else:
                     self.venues[pid] += 1
+        # print("The length of uid is: {}".format(len(self.data[uid])))
+        # print("Count: {}".format(Counter(self.data)))
+        cnt = len(self.data.keys())
+        # pdb.set_trace()
 
-    # ########### 3.0 basically filter users based on visit length and other statistics
+        print(self.data.keys())        
+
+        print("Printing the time of uid 14324035")
+        for x in self.data['14324035']:
+            print(x[1])
+       
+        print("Printing the time of uid 14604426")
+        for x in self.data['14604426']:
+            print(x[1])
+
+        print("Number of unique UID in the dataset: {}".format(cnt))
+
+
+    # ########### 2.0 basically filter users based on visit length and other statistics
     def filter_users_by_length(self):
         """
         [ expression for item in list if conditional ]
         """
-        
         # filter out the uids with a number of visits that is larger than trace_len_min 
-        uid_3 = [x for x in self.data if len(self.data[x]) > self.trace_len_min]
+        uid_filtered = [x for x in self.data if len(self.data[x]) > self.trace_len_min]
+        print("Number of UID with longer than 10 visits: {}".format(len(uid_filtered)))
+        # Pack the uid and the number of visits together and sorted by the number of visits from high to low
+        uid_filtered_sorted = sorted([(x, len(self.data[x])) for x in uid_filtered], key=lambda x: x[1], reverse=True)
+
+        # filter out the pid with a number of visits that is larger than location_global 
+        pid_filtered = [x for x in self.venues if self.venues[x] > self.location_global_visit_min]
+        # Pack the pid and the number of visits together and sorted by the number of visits from high to low
+        pid_filtered_sorted = sorted([(x, self.venues[x]) for x in pid_filtered], key=lambda x: x[1], reverse=True)
+
+        pid_filtered = dict(pid_filtered_sorted)
         
-        
-        # Pack the uid and the number of visits together and sorted by the number of visits
-        pick3 = sorted([(x, len(self.data[x])) for x in uid_3], key=lambda x: x[1], reverse=True)
-        pid_3 = [x for x in self.venues if self.venues[x] > self.location_global_visit_min]
-        
-        pid_pic3 = sorted([(x, self.venues[x]) for x in pid_3], key=lambda x: x[1], reverse=True)
-        
-        pid_3 = dict(pid_pic3)
         session_len_list = []
-        
-        for u in pick3:
+
+        for u in uid_filtered_sorted:
             uid = u[0]
-            info = self.data[uid]
+            pid_n_time = self.data[uid]
             # Report the frequency of each element in the dictionary
             # topk contains all the places with number of visits
-            topk = Counter([x[0] for x in info]).most_common()
+            # x[0] is pid in pid_n_time
+            topk = Counter([x[0] for x in pid_n_time]).most_common()
+
             # topk1 is the locations visited more than once
             topk1 = [x[0] for x in topk if x[1] > 1]
             
             sessions = {}
-            for i, record in enumerate(info):
-                poi, tmd = record
-                # print("poi: {}".format(poi))
-                # print("tmd: {}".format(tmd))
+            # One entry of pid_n_time: ['4c7c071181bca09382ee0415', '2012-4-16 20:15:54']
+            for i, pid_n_time_enu in enumerate(pid_n_time):
+                poi, tmd = pid_n_time_enu
+
                 try:
                     # mktime: convert time the seconds since epoch in local time
                     tid = int(time.mktime(time.strptime(tmd, "%Y-%m-%d %H:%M:%S")))
-                    # print("tid: {}".format(tid))
                 except Exception as e:
                     print('error:{}'.format(e))
                     continue
+                
+                # Use the length of the senssion as session id
                 sid = len(sessions)
+
+                # print(sid)
                 # print("sid: {}".format(sid))
-                if poi not in pid_3 and poi not in topk1:
+                if poi not in pid_filtered and poi not in topk1:
                     # if poi not in topk1:
                     continue
                 if i == 0 or len(sessions) == 0:
-                    sessions[sid] = [record]
+                    sessions[sid] = [pid_n_time_enu]
                 else:
                     if (tid - last_tid) / 3600 > self.hour_gap or len(sessions[sid - 1]) > self.session_max:
-                        sessions[sid] = [record]
+                        sessions[sid] = [pid_n_time_enu]
                     elif (tid - last_tid) / 60 > self.min_gap:
-                        sessions[sid - 1].append(record)
+                        sessions[sid - 1].append(pid_n_time_enu)
                     else:
                         pass
                 last_tid = tid
             sessions_filter = {}
             for s in sessions:
+                # pdb.set_trace()
                 if len(sessions[s]) >= self.filter_short_session:
                     sessions_filter[len(sessions_filter)] = sessions[s]
                     session_len_list.append(len(sessions[s]))
@@ -142,13 +178,13 @@ class DataFoursquare(object):
 
         self.user_filter3 = [x for x in self.data_filter if
                              self.data_filter[x]['sessions_count'] >= self.sessions_count_min]
-        filtered_user_id = self.user_filter3
-        return filtered_user_id
+        print("user_filter3: {}".format(self.user_filter3))
 
-    # ########### 4. build dictionary for users and location
+    # ########### 3. build dictionary for users and location
     def build_users_locations_dict(self):
         for u in self.user_filter3:
             sessions = self.data_filter[u]['sessions']
+            # pdb.set_trace()
             if u not in self.uid_list:
                 self.uid_list[u] = [len(self.uid_list), len(sessions)]
             for sid in sessions:
@@ -165,12 +201,12 @@ class DataFoursquare(object):
         # with open(self.TWITTER_PATH, 'r') as fid:
         with open(self.DATASET_PATH + self.DATASET_NAME, 'r') as fid:
             for line in fid:
-                # _, uid, lon, lat, tim, _, _, tweet, pid = line.strip('\r\n').split('')
-                uid, pid, _, _, lat, lon, _, tim_orig = line.strip('\r\n').split('\t')
+                _, uid, lon, lat, tim, _, _, tweet, pid = line.strip('\r\n').split('')
+                # uid, pid, _, _, lat, lon, _, tim_orig = line.strip('\r\n').split('\t')
                 
-                day, mon, date, time, zero, year = tim_orig.strip('\r\n').split(' ')
-                mon_num = str(strptime(mon, '%b').tm_mon)
-                tim = (year + '-' + mon_num + '-' + date + ' ' + time)
+                # day, mon, date, time, zero, year = tim_orig.strip('\r\n').split(' ')
+                # mon_num = str(strptime(mon, '%b').tm_mon)
+                # tim = (year + '-' + mon_num + '-' + date + ' ' + time)
                 self.pid_loc_lat[pid] = [float(lon), float(lat)]
 
     def venues_lookup(self):
@@ -179,7 +215,7 @@ class DataFoursquare(object):
             lon_lat = self.pid_loc_lat[pid]
             self.vid_lookup[vid] = lon_lat
 
-    # ########## 5.0 prepare training data for neural network
+    # ########## 4.0 prepare training data for neural network
     @staticmethod
     def tid_list(tmd):
         tm = time.strptime(tmd, "%Y-%m-%d %H:%M:%S")
@@ -252,12 +288,11 @@ class DataFoursquare(object):
                                                      'train_loc': train_loc, 'explore': location_ratio,
                                                      'entropy': entropy, 'rg': rg}
 
+
+            
     # ############# 6. save variables
     def get_parameters(self):
         parameters = {}
-        # parameters['TWITTER_PATH'] = self.TWITTER_PATH
-        parameters['SAVE_PATH'] = self.SAVE_PATH
-
         parameters['trace_len_min'] = self.trace_len_min
         parameters['location_global_visit_min'] = self.location_global_visit_min
         parameters['hour_gap'] = self.hour_gap
@@ -269,12 +304,6 @@ class DataFoursquare(object):
 
         return parameters
 
-    def save_variables(self):
-        foursquare_dataset = {'data_neural': self.data_neural, 'vid_list': self.vid_list, 'uid_list': self.uid_list,
-                              'parameters': self.get_parameters(), 'data_filter': self.data_filter,
-                              'vid_lookup': self.vid_lookup}
-        pickle.dump(foursquare_dataset, open(self.SAVE_PATH + self.save_name + '.pk', 'wb'))
-
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--trace_min', type=int, default=10, help="raw trace length filter threshold")
@@ -285,166 +314,27 @@ def parse_args():
     parser.add_argument('--session_min', type=int, default=5, help="control the length of session not too short")
     parser.add_argument('--sessions_min', type=int, default=5, help="the minimum amount of the good user's sessions")
     parser.add_argument('--train_split', type=float, default=0.8, help="train/test ratio")
-    parser.add_argument('--save_name', type=str, default='foursquare_nyc_20000_user_1', help="the file name for the pk")
-    parser.add_argument('--dataset_name', type=str, default='dataset_TSMC2014_NYC_private', help="the file name for the txt")
-
     return parser.parse_args()
-# FILE = '../dataset_tsmc2014/dataset_TSMC2014_NYC_20000_user_1.txt'
-# OUTPUT = '../dataset_tsmc2014/dataset_TSMC2014_NYC_20000_user_1_top100.txt'
-
-FILE = '../dataset_tsmc2014/dataset_TSMC2014_NYC.txt'
-# OUTPUT = '../dataset_tsmc2014/dataset_TSMC2014_NYC_20000_top100.txt'
-FILTERED = '../dataset_tsmc2014/dataset_TSMC2014_NYC_filtered.txt'
-OUTPUT_PUB = '../dataset_tsmc2014/dataset_TSMC2014_NYC_public.txt'
-OUTPUT_PRI = '../dataset_tsmc2014/dataset_TSMC2014_NYC_private.txt'
-
-NUM_WORKERS = 2
-random.seed(10)
-worker_bin = [[] for i in range(NUM_WORKERS)]
-
-# Use the first 100 users as public 
-public_uid = []
-private_uid = []
-filtered_uid = []
-
-def sortLinesByColumn(readable, column, column_type):
-    """Returns a list of strings (lines in readable file) in sorted order (based on column)"""
-    lines = []
-
-    for i, line in enumerate(readable):
-        # get the element in column based on which the lines are to be sorted
-        if i % 1000 == 0:
-            print(i, line)
-        
-        column_element= column_type(line.split('\t')[column-1])
-        lines.append((column_element, line))
-
-    lines.sort()
-
-    return [x[1] for x in lines]
-
-# parser = argparse.ArgumentParser()
-# parser.add_argument("echo", help="echo the string")
-# parser.add_argument("num_workers", help="number of workers")
-
-# args = parser.parse_args()
-# print(args.echo)
-
-# Initalize arrays to hold user data
-
-def count_unique_uid(readable):
-    count_dict = {}
-    for l in readable:
-        uid = l.split('\t')[0]
-        if uid not in count_dict:
-            count_dict[uid] = 1
-        else:
-            count_dict[uid] += 1
-
-    # print(count_dict)
-    cnt_keys = 0
-    for k, v in count_dict.items():
-        cnt_keys += 1
-    print("The total number of keys is: {}".format(cnt_keys))
-    return count_dict, cnt_keys
-
-with open(FILE) as f:
-    # sort the lines based on uid (column 1), and column 1 is type int
-    
-    unique_dict = {}
-    sorted_lines = sortLinesByColumn(f, 1, int)
-    unique_dict, _ = count_unique_uid(sorted_lines)
-
-    # dict is ordered so change to list and change back
-    key_array = list(unique_dict.items())
-    random.shuffle(key_array)
-
-    # store the first uids in an array
-    elememnt_count = 0
-    # key_array_top_100 = []
-
-    print("The length of the array: {}".format(len(key_array)))
-
-def sample_users(array, pub_uid, pri_uid):
-    # select 100 users from a randomly shuffled input
-    for x in array:
-        if x not in pub_uid and len(pub_uid) < 100:
-            pub_uid.append(x)
-            # print(x)
-        else:
-            pri_uid.append(x)
-    return pub_uid, pri_uid
 
 
+if __name__ == '__main__':
+    args = parse_args()
+    data_generator = DataFoursquare(trace_min=args.trace_min, global_visit=args.global_visit,
+                                    hour_gap=args.hour_gap, min_gap=args.min_gap,
+                                    session_min=args.session_min, session_max=args.session_max,
+                                    sessions_min=args.sessions_min, train_split=args.train_split)
 
-def sample_users_dynamic(array, sample_size):
-    # Split the private uids into two part to use as local data    
-    # select users from a randomly shuffled input
-    uid_grp_1, uid_grp_2 = [], []
-    
-    for x in array:
-        if x not in uid_grp_1 and len(uid_grp_1) < sample_size:
-            uid_grp_1.append(x)
-            # print(x)
-        else:
-            uid_grp_2.append(x)
-    return uid_grp_1, uid_grp_2
-
-def unique(list1): 
-
-    # intilize a null list 
-    unique_list = [] 
-      
-    # traverse for all elements 
-    for x in list1: 
-        # check if exists in unique_list or not 
-        if x not in unique_list: 
-            unique_list.append(x) 
-    # print list 
-    print("The length of the unique list is: {}".format(len(unique_list)))
-    # for x in unique_list: 
-    #     print x
-
-def verify(path):
-    with open(path, 'r') as f:
-        _, cnt = count_unique_uid(f)
-    return cnt
-
-args = parse_args()
-data_generator = DataFoursquare(trace_min=args.trace_min, global_visit=args.global_visit,
-                                hour_gap=args.hour_gap, min_gap=args.min_gap,
-                                session_min=args.session_min, session_max=args.session_max,
-                                sessions_min=args.sessions_min, train_split=args.train_split, save_name=args.save_name, dataset_name=args.dataset_name)
-parameters = data_generator.get_parameters()
-print('############PARAMETER SETTINGS:\n' + '\n'.join([p + ':' + str(parameters[p]) for p in parameters]))
-print('############START PROCESSING:')
-print('load trajectory from {}'.format(data_generator.DATASET_PATH + data_generator.DATASET_NAME))
-data_generator.load_trajectory_from_tweets()
-print('filter users')
-filtered_uid = data_generator.filter_users_by_length()
-print(len(filtered_uid))
-# unique(filtered_uid)
-
-random.shuffle(filtered_uid)
-public_uid, private_uid = sample_users(filtered_uid, public_uid, private_uid)
-print("The length of the public_uid: {}".format(len(public_uid)))
-print("The length of the private_uid: {}".format(len(private_uid)))
-# print(top_100(filtered_uid))
-
-with open(FILE, 'r') as fd:
-    with open(OUTPUT_PUB, 'w') as fout_pub:
-        with open(OUTPUT_PRI, 'w') as fout_pri:
-            for line in fd:
-                l = line.split('\t')
-                if l[0] in public_uid:
-                    fout_pub.write(line)
-                elif l[0] in private_uid:
-                    fout_pri.write(line)
-
-
-verify(FILTERED)
-verify(FILE)
-verify(OUTPUT_PUB)
-print("The number of keys in private output: {}".format(verify(OUTPUT_PRI)))
-
-# uid_grp_1, uid_grp_2 = sample_users_dynamic(private_uid, 714/2)
+    parameters = data_generator.get_parameters()
+    print('#'*10 + ' PARAMETER SETTINGS ' + '#'*10)
+    print('\n'.join([p + ':' + str(parameters[p]) for p in parameters]))
+    print(10*'#' + ' START PROCESSING ' + 10*'#')
+    print('1. load trajectory from {}'.format(data_generator.DATASET_PATH + data_generator.DATASET_NAME))
+    data_generator.load_trajectory_from_tweets()
+    print('2. filter users')
+    data_generator.filter_users_by_length()
+    print('3. build users/locations dictionary')
+    data_generator.build_users_locations_dict()
+    data_generator.load_venues()
+    data_generator.venues_lookup()
+    print('4. prepare data for neural network')
+    data_generator.prepare_neural_data()

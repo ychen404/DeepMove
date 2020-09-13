@@ -5,15 +5,21 @@ from collections import Counter
 import cPickle as pickle
 import time
 
+"""
+This code creates the number of datasets based on the number of effective users from the tweets-cikm dataset
+Somehow the filter user result alway returns zero
+Started from scratch from the original sparse_traces.py
+"""
+
 class DataFoursquare(object):
     def __init__(self, trace_min=10, global_visit=10, hour_gap=72, min_gap=10, session_min=2, session_max=10,
-                 sessions_min=2, train_split=0.8, embedding_len=50, save_name='foursquare_nyc_private', 
-                 dataset_name='dataset_TSMC2014_NYC_private'):
+                 sessions_min=2, train_split=0.8, embedding_len=50, save_name='cikm_private', 
+                 dataset_name='tweets-cikm'):
         tmp_path = "../data/"
         
         self.SAVE_PATH = tmp_path
         self.save_name = save_name
-        self.DATASET_PATH='/home/local/ASUAD/ychen404/Code/DeepMove_new/dataset_tsmc2014/'
+        self.DATASET_PATH='/home/local/ASUAD/ychen404/Code/DeepMove_new/serm-data/'
         # self.DATASET_NAME='dataset_TSMC2014_NYC_20000.txt'
         # self.DATASET_NAME='dataset_TSMC2014_NYC_20000_user_1.txt'
         # self.DATASET_NAME='dataset_TSMC2014_NYC_private.txt'
@@ -51,21 +57,24 @@ class DataFoursquare(object):
     def load_trajectory_from_tweets(self):
         with open(self.DATASET_PATH + self.DATASET_NAME + '.txt') as fid:
         # with open(self.TWITTER_PATH, 'r') as fid:
+
+            _, cnt_keys = count_unique_uid(fid)
+            print("There are {} unique users in the dataset".format(cnt_keys))
             for i, line in enumerate(fid):
-                # _, uid, _, _, tim, _, _, tweet, pid = line.strip('\r\n').split('')
-                # print("pid:{}".format(pid))
+                _, uid, _, _, tim, _, _, tweet, pid = line.strip('\r\n').split('')
+                print("uid:{}".format(uid))
                 
                 ########## Match the fields in Foursquare NYC dataset ##########
                 # print(i)
                 # if i % 1000 == 0:
                 #     print(i, line)
 
-                uid, pid, _, _, _, _, _, tim_orig = line.strip('\r\n').split('\t')
+                # uid, pid, _, _, _, _, _, tim_orig = line.strip('\r\n').split('\t')
 
                 ########## Convert character month to number to match with the clean_tweets_sample.txt ########## 
-                day, mon, date, time, zero, year = tim_orig.strip('\r\n').split(' ')
-                mon_num = str(strptime(mon, '%b').tm_mon)
-                tim = (year + '-' + mon_num + '-' + date + ' ' + time)
+                # day, mon, date, time, zero, year = tim_orig.strip('\r\n').split(' ')
+                # mon_num = str(strptime(mon, '%b').tm_mon)
+                # tim = (year + '-' + mon_num + '-' + date + ' ' + time)
                 
                 if uid not in self.data:
                     self.data[uid] = [[pid, tim]]
@@ -76,48 +85,34 @@ class DataFoursquare(object):
                 else:
                     self.venues[pid] += 1
 
-    # ########### 3.0 basically filter users based on visit length and other statistics
+    # # ########### 3.0 basically filter users based on visit length and other statistics
+    # def filter_users_by_length(self):
+    #     """
+    #     [ expression for item in list if conditional ]
+    #     """
+# ########### 3.0 basically filter users based on visit length and other statistics
     def filter_users_by_length(self):
-        """
-        [ expression for item in list if conditional ]
-        """
-        
-        # filter out the uids with a number of visits that is larger than trace_len_min 
         uid_3 = [x for x in self.data if len(self.data[x]) > self.trace_len_min]
-        
-        
-        # Pack the uid and the number of visits together and sorted by the number of visits
         pick3 = sorted([(x, len(self.data[x])) for x in uid_3], key=lambda x: x[1], reverse=True)
         pid_3 = [x for x in self.venues if self.venues[x] > self.location_global_visit_min]
-        
         pid_pic3 = sorted([(x, self.venues[x]) for x in pid_3], key=lambda x: x[1], reverse=True)
-        
         pid_3 = dict(pid_pic3)
+
         session_len_list = []
-        
         for u in pick3:
             uid = u[0]
             info = self.data[uid]
-            # Report the frequency of each element in the dictionary
-            # topk contains all the places with number of visits
             topk = Counter([x[0] for x in info]).most_common()
-            # topk1 is the locations visited more than once
             topk1 = [x[0] for x in topk if x[1] > 1]
-            
             sessions = {}
             for i, record in enumerate(info):
                 poi, tmd = record
-                # print("poi: {}".format(poi))
-                # print("tmd: {}".format(tmd))
                 try:
-                    # mktime: convert time the seconds since epoch in local time
                     tid = int(time.mktime(time.strptime(tmd, "%Y-%m-%d %H:%M:%S")))
-                    # print("tid: {}".format(tid))
                 except Exception as e:
                     print('error:{}'.format(e))
                     continue
                 sid = len(sessions)
-                # print("sid: {}".format(sid))
                 if poi not in pid_3 and poi not in topk1:
                     # if poi not in topk1:
                     continue
@@ -142,6 +137,7 @@ class DataFoursquare(object):
 
         self.user_filter3 = [x for x in self.data_filter if
                              self.data_filter[x]['sessions_count'] >= self.sessions_count_min]
+                             
         filtered_user_id = self.user_filter3
         return filtered_user_id
 
@@ -165,12 +161,12 @@ class DataFoursquare(object):
         # with open(self.TWITTER_PATH, 'r') as fid:
         with open(self.DATASET_PATH + self.DATASET_NAME, 'r') as fid:
             for line in fid:
-                # _, uid, lon, lat, tim, _, _, tweet, pid = line.strip('\r\n').split('')
-                uid, pid, _, _, lat, lon, _, tim_orig = line.strip('\r\n').split('\t')
+                _, uid, lon, lat, tim, _, _, tweet, pid = line.strip('\r\n').split('')
+                # uid, pid, _, _, lat, lon, _, tim_orig = line.strip('\r\n').split('\t')
                 
-                day, mon, date, time, zero, year = tim_orig.strip('\r\n').split(' ')
-                mon_num = str(strptime(mon, '%b').tm_mon)
-                tim = (year + '-' + mon_num + '-' + date + ' ' + time)
+                # day, mon, date, time, zero, year = tim_orig.strip('\r\n').split(' ')
+                # mon_num = str(strptime(mon, '%b').tm_mon)
+                # tim = (year + '-' + mon_num + '-' + date + ' ' + time)
                 self.pid_loc_lat[pid] = [float(lon), float(lat)]
 
     def venues_lookup(self):
@@ -292,7 +288,9 @@ def parse_args():
 # FILE = '../dataset_tsmc2014/dataset_TSMC2014_NYC_20000_user_1.txt'
 # OUTPUT = '../dataset_tsmc2014/dataset_TSMC2014_NYC_20000_user_1_top100.txt'
 
-FILE = '../dataset_tsmc2014/dataset_TSMC2014_NYC.txt'
+
+# FILE = '../dataset_tsmc2014/dataset_TSMC2014_NYC.txt'
+FILE = '../serm-data/tweets-cikm.txt'
 # OUTPUT = '../dataset_tsmc2014/dataset_TSMC2014_NYC_20000_top100.txt'
 FILTERED = '../dataset_tsmc2014/dataset_TSMC2014_NYC_filtered.txt'
 OUTPUT_PUB = '../dataset_tsmc2014/dataset_TSMC2014_NYC_public.txt'
@@ -333,9 +331,17 @@ def sortLinesByColumn(readable, column, column_type):
 # Initalize arrays to hold user data
 
 def count_unique_uid(readable):
+    # print_l = True
     count_dict = {}
     for l in readable:
-        uid = l.split('\t')[0]
+        # if print_l == True:
+        #     print(l)
+        #     print_l = False
+        _, uid, _, _, tim, _, _, tweet, pid = l.strip('\r\n').split('')
+        # uid = l.strip('\r\n').split('')[1]
+
+        # uid = l.strip('\r\n').split(' ')[1]
+        # print(uid)
         if uid not in count_dict:
             count_dict[uid] = 1
         else:
@@ -348,22 +354,22 @@ def count_unique_uid(readable):
     print("The total number of keys is: {}".format(cnt_keys))
     return count_dict, cnt_keys
 
-with open(FILE) as f:
-    # sort the lines based on uid (column 1), and column 1 is type int
+# with open(FILE) as f:
+#     # sort the lines based on uid (column 1), and column 1 is type int
     
-    unique_dict = {}
-    sorted_lines = sortLinesByColumn(f, 1, int)
-    unique_dict, _ = count_unique_uid(sorted_lines)
+#     unique_dict = {}
+#     sorted_lines = sortLinesByColumn(f, 1, int)
+#     unique_dict, _ = count_unique_uid(sorted_lines)
 
-    # dict is ordered so change to list and change back
-    key_array = list(unique_dict.items())
-    random.shuffle(key_array)
+#     # dict is ordered so change to list and change back
+#     key_array = list(unique_dict.items())
+#     random.shuffle(key_array)
 
-    # store the first uids in an array
-    elememnt_count = 0
-    # key_array_top_100 = []
+#     # store the first uids in an array
+#     elememnt_count = 0
+#     # key_array_top_100 = []
 
-    print("The length of the array: {}".format(len(key_array)))
+#     print("The length of the array: {}".format(len(key_array)))
 
 def sample_users(array, pub_uid, pri_uid):
     # select 100 users from a randomly shuffled input
@@ -422,29 +428,30 @@ print('load trajectory from {}'.format(data_generator.DATASET_PATH + data_genera
 data_generator.load_trajectory_from_tweets()
 print('filter users')
 filtered_uid = data_generator.filter_users_by_length()
-print(len(filtered_uid))
+print("There are {} unique filtered users".format(len(filtered_uid)))
 # unique(filtered_uid)
 
 random.shuffle(filtered_uid)
 public_uid, private_uid = sample_users(filtered_uid, public_uid, private_uid)
-print("The length of the public_uid: {}".format(len(public_uid)))
-print("The length of the private_uid: {}".format(len(private_uid)))
+
+# print("The length of the public_uid: {}".format(len(public_uid)))
+# print("The length of the private_uid: {}".format(len(private_uid)))
 # print(top_100(filtered_uid))
 
-with open(FILE, 'r') as fd:
-    with open(OUTPUT_PUB, 'w') as fout_pub:
-        with open(OUTPUT_PRI, 'w') as fout_pri:
-            for line in fd:
-                l = line.split('\t')
-                if l[0] in public_uid:
-                    fout_pub.write(line)
-                elif l[0] in private_uid:
-                    fout_pri.write(line)
+# with open(FILE, 'r') as fd:
+#     with open(OUTPUT_PUB, 'w') as fout_pub:
+#         with open(OUTPUT_PRI, 'w') as fout_pri:
+#             for line in fd:
+#                 l = line.split('\t')
+#                 if l[0] in public_uid:
+#                     fout_pub.write(line)
+#                 elif l[0] in private_uid:
+#                     fout_pri.write(line)
 
 
-verify(FILTERED)
-verify(FILE)
-verify(OUTPUT_PUB)
-print("The number of keys in private output: {}".format(verify(OUTPUT_PRI)))
+# verify(FILTERED)
+# verify(FILE)
+# verify(OUTPUT_PUB)
+print("The number of keys in cikm_20000: {}".format(verify(FILE)))
 
 # uid_grp_1, uid_grp_2 = sample_users_dynamic(private_uid, 714/2)
