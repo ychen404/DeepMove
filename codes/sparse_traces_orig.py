@@ -31,10 +31,11 @@ class DataFoursquare(object):
                  sessions_min=2, train_split=0.8, embedding_len=50):
         tmp_path = "../data/"
         # self.TWITTER_PATH = tmp_path + 'foursquare/tweets_clean.txt'
-        self.TWITTER_PATH = '/home/local/ASUAD/ychen404/Code/DeepMove_new/serm-data/tweets-cikm.txt'
+        # self.TWITTER_PATH = '/home/local/ASUAD/ychen404/Code/DeepMove_new/serm-data/tweets-cikm.txt'
+        self.TWITTER_PATH = '/home/local/ASUAD/ychen404/Code/DeepMove_new/serm-data/user_data/pub.txt'
         self.VENUES_PATH = tmp_path + 'foursquare/venues_all.txt'
         self.SAVE_PATH = tmp_path
-        self.save_name = 'tweets-cikm'
+        self.save_name = 'tweets-cikm-pub'
 
         self.trace_len_min = trace_min
         self.location_global_visit_min = global_visit

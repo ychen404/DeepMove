@@ -61,6 +61,7 @@ class RnnParameterData(object):
 def generate_input_history(data_neural, mode, mode2=None, candidate=None):
     data_train = {}
     train_idx = {}
+    # pdb.set_trace()
     if candidate is None:
         candidate = data_neural.keys()
     for u in candidate:
@@ -70,7 +71,7 @@ def generate_input_history(data_neural, mode, mode2=None, candidate=None):
         for c, i in enumerate(train_id):
             if mode == 'train' and c == 0:
                 continue
-            pdb.set_trace()
+            # pdb.set_trace()
             session = sessions[i]
             trace = {}
             loc_np = np.reshape(np.array([s[0] for s in session[:-1]]), (len(session[:-1]), 1))
@@ -365,7 +366,8 @@ def run_simple(data, run_idx, mode, lr, clip, model, optimizer, criterion, mode2
             # Top 5
             # users_acc[u][1] += acc[1]
 
-            # Top 1
+            # Top 1 
+            # You can report all the accuracy at one run by creating another acc array
             users_acc[u][1] += acc[2]
         
 
