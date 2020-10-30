@@ -53,8 +53,8 @@ def heatmap(data, row_labels, col_labels, ax=None,
     cbar.ax.set_ylabel(cbarlabel, rotation=-90, va="bottom")
 
     # We want to show all ticks...
-    # ax.set_xticks(np.arange(data.shape[1]))
-    # ax.set_yticks(np.arange(data.shape[0]))
+    ax.set_xticks(np.arange(data.shape[1]))
+    ax.set_yticks(np.arange(data.shape[0]))
     
     # ... and label them with the respective list entries.
     # ax.set_xticklabels(col_labels)
@@ -143,7 +143,9 @@ df = pd.read_csv('tweets-cikm-sample-march.txt', delimiter='\x01')
 
 df_full = pd.read_csv('tweets-cikm-w-header.txt', delimiter='\x01')
 print(f"Unique loc: {len(df_full.pid.unique())}")
+num_total_lines = len(df_full)
 
+# exit("done")
 # Split the existing column to two
 # df[['date','timestamp']] = df_full.time.str.split(' ', expand=True)
 # print(f"Another Unique date: {len(df.date.unique())}")
@@ -195,6 +197,8 @@ def count_freq(dateframe):
 unique_time = []
 unique_loc = []
 for i, r in df_full.iterrows():
+    if i % 10000 == 0:
+        print(f"Creating location and time index {i}/{num_total_lines}")
     if r.time.split(' ')[0] not in unique_time:
         unique_time.append(r.time.split(' ')[0])
     if r.pid not in unique_loc:
@@ -222,6 +226,8 @@ print(date_index_dict)
 loc_index_dict = dict(zip(unique_loc, loc_index))
 
 for index, row in df_full.iterrows():
+    if index % 10000 == 0:
+        print(f"Calculating density {index}/{num_total_lines}")
     user_added = {}
     date = row.time.split(' ')[0]
     user_added[date] = ['None']
@@ -232,50 +238,65 @@ for index, row in df_full.iterrows():
 
 print(density_map[0])
 print(density_map.shape)
-harvest = np.array([[0, 3, 0, 0, 0, 0, 0],
-                    [0, 0, 3, 0, 0, 0, 0],
-                    [0, 0, 0, 3, 0, 0, 0],
-                    [0, 0, 0, 3, 5, 0, 0],
-                    [0, 0, 0, 0, 0, 5, 0],
-                    [0, 0, 0, 0, 0, 3, 0],
-                    [0, 0, 0, 0, 0, 3, 0],
-                    [0, 0, 0, 0, 0, 3, 0],
-                    [0, 0, 0, 0, 0, 0, 6]])
+
+# harvest = np.array([[0, 3, 0, 0, 0, 0, 0],
+#                     [0, 0, 3, 0, 0, 0, 0],
+#                     [0, 0, 0, 3, 0, 0, 0],
+#                     [0, 0, 0, 3, 5, 0, 0],
+#                     [0, 0, 0, 0, 0, 5, 0],
+#                     [0, 0, 0, 0, 0, 3, 0],
+#                     [0, 0, 0, 0, 0, 3, 0],
+#                     [0, 0, 0, 0, 0, 3, 0],
+#                     [0, 0, 0, 0, 0, 0, 6]])
 # print(harvest)
 # print(harvest.shape)
 # print(loc_index)
 # print(date_index)
 # exit()
 
-density_map_small = density_map[0:325, 0:325]
-print(density_map_small.shape)
-# exit()
-fig, ax = plt.subplots(figsize=(300,300))
+for i in range(119, num_rows//num_col):
+    
+    path = '/home/local/ASUAD/ychen404/Code/DeepMove_new/serm-data/heatmaps/'
+    filename = 'heatmap' + '_' + str(i) + '.png'
+    print(f"Start {filename}")
+    # Divide the number location in a 325 block
+        
+    start_loc = 326 * i
+    end_loc = 326 * i + 325
+    # 
+    # density_map_small = density_map[0:325, 0:325]
+    density_map_small = density_map[start_loc:end_loc, :]
+    
+    fig, ax = plt.subplots(figsize=(300,300))
+    # fig, ax = plt.subplots()
+    # loc_array, date_array, date_array_nodup = count_freq(df)
+    # print(f"date_array_nodup = {date_array_nodup}")
+    # print(f"loc_array = {loc_array}")
+    # print(loc_index)
 
-# loc_array, date_array, date_array_nodup = count_freq(df)
-# print(f"date_array_nodup = {date_array_nodup}")
-# print(f"loc_array = {loc_array}")
-# print(loc_index)
+    # loc_index_str = []
+    # date_index_str = []
+    # for e in loc_index:
+    #     loc_index_str.append(str(e))
 
-loc_index_str = []
-date_index_str = []
-for e in loc_index:
-    loc_index_str.append(str(e))
+    # for e in date_index:
+    #     date_index_str.append(str(e))
 
-for e in date_index:
-    date_index_str.append(str(e))
+    # print(date_index)
+    # print(loc_index_str, date_index_str)
+    # exit("hey, exiting")
 
-# print(date_index)
-# print(loc_index_str, date_index_str)
-# exit("hey, exiting")
-
-start = time.time()
-im, cbar = heatmap(density_map_small, loc_index_str[0:325], date_index_str, ax=ax,
-                   cmap="Reds", cbarlabel="Number of Visits")
-# im, cbar = heatmap(harvest, loc_array, date_array_nodup, ax=ax,
-#                    cmap="Reds", cbarlabel="Number of Visits")
-texts = annotate_heatmap(im, valfmt="{x:d} ")
-fig.tight_layout()
-plt.savefig('heatmap.pdf', bbox_inches='tight', dpi=80)
-end = time.time()
-print(f"Time elapse {end - start} seconds")
+    start = time.time()
+    # im, cbar = heatmap(density_map_small, loc_index_str[0:325], date_index_str, ax=ax,
+    #                    cmap="Reds", cbarlabel="Number of Visits")
+    
+    im, cbar = heatmap(density_map_small, loc_index[start_loc:end_loc], date_index, ax=ax,
+                       cmap="Reds", cbarlabel="Number of Visits")
+    
+    texts = annotate_heatmap(im, valfmt="{x:d} ")
+    fig.tight_layout()
+    # plt.savefig('heatmap.pdf', bbox_inches='tight', dpi=80)
+    print(f"Saving to {filename}")
+    plt.savefig(path + filename, bbox_inches='tight', dpi=80)
+    end = time.time()
+    print(f"Time elapse {end - start} seconds")
